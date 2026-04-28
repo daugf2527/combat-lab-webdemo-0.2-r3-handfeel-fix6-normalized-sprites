@@ -6,6 +6,8 @@
 
 当前工程原型名为 **Combat Lab**。它负责验证类 DNF 的 2.5D 战斗手感、技能释放、怪物反馈、Boss 表现、素材规范化与静态行为测试。项目总名定为 **碳影 / Carbon Shade**。
 
+正式仓库名 / Pages 路径标准：`carbon-shade-web`。
+
 ## Project direction
 
 《碳影》是一款关于借力、成长、代价与归途的 2.5D 战斗养成寓言。
@@ -47,7 +49,7 @@ The browser screenshot and aggregate verify scripts are intentionally not expose
 
 | Service | Port | Purpose |
 |---|---:|---|
-| combat-lab | 5173 | Vite development server |
+| carbon-shade-web | 5173 | Vite development server |
 
 ## Current prototype scope
 
