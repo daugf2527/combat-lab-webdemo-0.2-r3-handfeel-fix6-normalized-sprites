@@ -1,5 +1,5 @@
 services:
-  combat-lab:
+  carbon-shade-web:
     build: .
     working_dir: /app
     volumes:
