@@ -23,9 +23,32 @@ Use TypeScript ES modules with explicit `.js` import specifiers for local compil
 
 Place behavior assertions in `tests/static/` with the `*.test.ts` suffix and use `tests/static/test-utils.ts` for `node:assert/strict`. Prefer deterministic kernel-level checks over visual-only assertions. For rendering or handfeel changes, run `npm run typecheck`, `npm run static:test`, and `npm run build`; browser screenshot verification is not a required npm path in this repository.
 
+## Performance Triage
+
+This is currently a demo-grade project, so some startup and first-entry spikes are acceptable while gameplay and handfeel are still being shaped. Do not treat every DevTools hotspot as a release blocker.
+
+Must fix immediately:
+
+- Runtime FPS keeps dropping during active combat.
+- Heap or replay/event memory grows continuously over time.
+- Input latency worsens after the game has been running for a while.
+- A profiling stack shows repeated per-frame cloning, allocation, texture creation, or unbounded archive growth.
+
+Can be logged as backlog for now:
+
+- First load `Image decode`, WebGL `texImage2D`, shader/program initialization, or texture upload spikes.
+- Initial scene construction spikes from creating Phaser `Text`, `Graphics`, or actor views.
+- Large normalized spritesheet decode/upload cost, unless it blocks basic demo usability.
+
+Known context:
+
+- `c4d3b22` fixed a runtime replay history blowup where each replay frame deep-cloned the full event archive. Future replay changes must preserve the rule that a replay frame stores only that frame's newly flushed events.
+- The normalized sprite sheets are fixed-cell demo assets and contain large transparent regions. Trimmed atlas/multiatlas plus anchor metadata is the higher-quality future asset pipeline, but it is not required before normal demo iteration.
+- For runtime optimization, prefer small dirty-check changes first: avoid repeated `setTexture`, `setText`, `setSize`, and `setColor` when values have not changed; lower debug/HUD text update frequency; keep debug-only text work behind visibility checks.
+
 ## Commit & Pull Request Guidelines
 
-This exported directory does not include `.git`, so no local commit history is available to infer a project-specific format. Use concise imperative commit subjects, for example `Fix normalized sprite frame clamp`. PRs should include the change scope, commands run, verification artifacts touched, and screenshots or replay/report JSON when visual behavior changes.
+This repository now has local Git history. Use concise imperative commit subjects, for example `Fix normalized sprite frame clamp`. PRs should include the change scope, commands run, verification artifacts touched, and screenshots or replay/report JSON when visual behavior changes.
 
 ## Agent-Specific Instructions
 
