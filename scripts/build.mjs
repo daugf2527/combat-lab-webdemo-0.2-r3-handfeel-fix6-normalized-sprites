@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const root = process.cwd();
 const distDir = path.join(root, 'dist');
 const verificationDir = path.join(root, 'verification');
-const buildCommand = 'node scripts/run-tsc.mjs -p tsconfig.build.json';
+const buildCommand = 'vite build';
 
 function writeResult(result) {
   mkdirSync(verificationDir, { recursive: true });
@@ -13,49 +13,52 @@ function writeResult(result) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-rmSync(distDir, { recursive: true, force: true });
-
-const tsc = spawnSync(process.execPath, [path.join(root, 'scripts', 'run-tsc.mjs'), '-p', path.join(root, 'tsconfig.build.json')], {
+const viteBin = path.join(root, 'node_modules', 'vite', 'bin', 'vite.js');
+const vite = spawnSync(process.execPath, [viteBin, 'build'], {
   cwd: root,
   encoding: 'utf8'
 });
 
-if (tsc.status !== 0) {
+if (vite.status !== 0) {
   const failed = {
     passed: false,
     command: buildCommand,
-    status: tsc.status ?? 1,
-    stdout: tsc.stdout,
-    stderr: tsc.stderr,
+    status: vite.status ?? 1,
+    stdout: vite.stdout,
+    stderr: vite.stderr,
     dist: 'dist/index.html'
   };
   writeResult(failed);
-  process.exit(tsc.status ?? 1);
+  process.exit(vite.status ?? 1);
 }
 
-const builtMain = path.join(distDir, 'assets', 'main.js');
-if (!existsSync(builtMain)) {
+const indexHtml = path.join(distDir, 'index.html');
+const assetsDir = path.join(distDir, 'assets');
+const emittedAssets = existsSync(assetsDir)
+  ? readdirSync(assetsDir).map((entry) => `dist/assets/${entry}`).sort()
+  : [];
+
+const hasMainBundle = emittedAssets.some((asset) => /\/index-[\w-]+\.js$/.test(asset) || /\/main-[\w-]+\.js$/.test(asset));
+
+if (!existsSync(indexHtml) || emittedAssets.length === 0 || !hasMainBundle) {
   const failed = {
     passed: false,
     command: buildCommand,
     status: 1,
-    stdout: tsc.stdout,
-    stderr: `${tsc.stderr ?? ''}\ndist/assets/main.js was not emitted`.trim(),
-    dist: 'dist/index.html'
+    stdout: vite.stdout,
+    stderr: `${vite.stderr ?? ''}\nVite build did not emit the expected dist/index.html and JS bundle`.trim(),
+    dist: 'dist/index.html',
+    assets: emittedAssets
   };
   writeResult(failed);
   process.exit(1);
 }
-
-mkdirSync(distDir, { recursive: true });
-const indexHtml = readFileSync(path.join(root, 'index.html'), 'utf8').replace('/src/main.ts', './assets/main.js');
-writeFileSync(path.join(distDir, 'index.html'), indexHtml);
 
 const passed = {
   passed: true,
   command: buildCommand,
   status: 0,
   dist: 'dist/index.html',
-  assets: ['dist/assets/main.js']
+  assets: emittedAssets
 };
 writeResult(passed);
