@@ -1,8 +1,9 @@
-# 碳影 / Carbon Shade 项目身份 v0.1
+# 碳影 / Carbon Shade 项目身份 v0.2
 
 > 状态：命名与定位基准稿  
 > 中文名：碳影  
 > 英文名：Carbon Shade  
+> 正式仓库名：carbon-shade-web  
 > 当前工程原型：Combat Lab  
 > 当前版本：0.2.9-handfeel-fix6-normalized-sprites
 
@@ -51,6 +52,7 @@
 | 层级 | 名称 | 用途 |
 |---|---|---|
 | 总项目 / 游戏名 | 碳影 / Carbon Shade | 对外正式名称 |
+| 正式仓库 / Pages 路径 | carbon-shade-web | GitHub 仓库名、Vite base、部署路径标准 |
 | 当前战斗原型 | Combat Lab | 当前 2.5D 战斗、手感、素材、技能验证工程 |
 | 世界中枢 | 明庭 | 任务大厅、收益结算、外智接入与角色成长中枢 |
 | 核心成长系统 | 自明 | 玩家在外智时代保有判断、本心与真实成长的系统表达 |
@@ -87,13 +89,19 @@
 
 ## 7. 当前工程改名原则
 
-仓库 URL 暂不直接改名，避免影响 GitHub Pages 路径、已有链接和部署配置。
+正式迁移目标：仓库名、Pages 路径与工程内部身份统一为 `carbon-shade-web`。
 
-工程内部先统一为：
+工程内部统一为：
 
 - 页面标题：碳影 Carbon Shade | Combat Lab
 - package name：carbon-shade-web
+- Docker service：carbon-shade-web
+- Vite base：/carbon-shade-web/
 - README 首屏：碳影 / Carbon Shade
 - docs：以本文件作为命名与定位基准
 
-后续若正式重命名仓库，应同步调整 Vite `base`、GitHub Pages 地址、README 链接与部署说明。
+GitHub 仓库本体完成重命名后，应确认：
+
+- GitHub Pages 地址为 `https://daugf2527.github.io/carbon-shade-web/`
+- Repository Settings → Pages → Source 为 GitHub Actions
+- workflow 使用 `.github/workflows/pages.yml`
