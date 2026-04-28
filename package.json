@@ -1,9 +1,9 @@
 {
-  "name": "combat-lab-webdemo-0.2-r3-handfeel",
-  "version": "0.2.9-handfeel-fix6-normalized-sprites",
+  "name": "carbon-shade-web",
+  "version": "0.2.9",
   "private": true,
   "type": "module",
-  "description": "Combat Lab 0.2-R3 handfeel fix6: normalizes uploaded sprite sheets into fixed-cell Phaser spritesheets, clamps action frames, and removes crop-origin/tint flash artifacts.",
+  "description": "Carbon Shade / 碳影: a 2.5D web combat prototype about borrowed power, AI-era agency, consequence, and the road back to one's own way.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "typecheck": "node scripts/typecheck.mjs",
