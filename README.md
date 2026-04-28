@@ -1,6 +1,23 @@
-# Combat Lab 0.2-R3 Real Implementation Pass
+# 碳影 / Carbon Shade
 
-This package replaces the previous token-grep prototype with a typed, module-split combat-kernel implementation. It keeps rendering assets original and placeholder-only.
+> 万般皆有定数，归来仍需问心。
+
+**Carbon Shade / 碳影** is a 2.5D web combat prototype about borrowed power, AI-era agency, consequence, and the road back to one's own way.
+
+当前工程原型名为 **Combat Lab**。它负责验证类 DNF 的 2.5D 战斗手感、技能释放、怪物反馈、Boss 表现、素材规范化与静态行为测试。项目总名定为 **碳影 / Carbon Shade**。
+
+## Project direction
+
+《碳影》是一款关于借力、成长、代价与归途的 2.5D 战斗养成寓言。
+
+表层是明亮、积极、可玩的战斗成长世界：角色、小怪、Boss、技能、连招、受击、击退、硬直、副本推进、装备掉落与成长反馈。
+
+深层则是 AI 时代的人与外智：现实任务可以通过外部智能、工具、插件、MCP、Skill、代码环境等能力完成，成果回流为角色经验、技能、装备和副本进度。但外智不是白给的，借智有债，代役留责。真正要面对的不是工具强不强，而是人在万般术数之中是否还能守住本心，找到自己的归途。
+
+Key identity docs:
+
+- `docs/00-project-mainline-v0.1.md` — mainline world/theme draft
+- `docs/01-project-identity.md` — naming and positioning baseline
 
 ## How to run
 
@@ -20,8 +37,8 @@ docker compose up --build
 
 ```bash
 npm run typecheck
-npm run build
 npm run static:test
+npm run build
 ```
 
 The browser screenshot and aggregate verify scripts are intentionally not exposed as npm verification commands because they can hang in local Windows browser-process environments. Use the stable checks above for code validation. The fallback build script compiles TypeScript directly and writes browser-ready ESM into `dist/` so verification artifacts can still be produced offline.
@@ -32,7 +49,11 @@ The browser screenshot and aggregate verify scripts are intentionally not expose
 |---|---:|---|
 | combat-lab | 5173 | Vite development server |
 
-## Implemented R3 acceptance points
+## Current prototype scope
+
+This prototype replaces the previous token-grep prototype with a typed, module-split combat-kernel implementation. It keeps rendering assets original and placeholder-only.
+
+Implemented R3 acceptance points:
 
 - Fixed 60 Hz `FixedStepSimulation`.
 - Module-split combat kernel: event bus, input, hit, damage, reaction, armor, status, buff, cooldown, hit stop, recoil, death, debug and replay modules.
@@ -49,7 +70,6 @@ The browser screenshot and aggregate verify scripts are intentionally not expose
 
 - `dist/`
 - `.tmp/static-test-results.json`
-
 
 ## Handfeel Fix4 Asset Pass
 
