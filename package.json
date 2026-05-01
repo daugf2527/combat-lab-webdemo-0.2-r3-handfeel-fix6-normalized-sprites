@@ -10,6 +10,7 @@
     "build": "node scripts/build.mjs",
     "static:test": "node scripts/static-test.mjs",
     "validate:sprites": "node scripts/validate-sprites.mjs",
+    "validate:assets": "node scripts/validate-assets.mjs",
     "browser:smoke": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {

@@ -53,7 +53,7 @@ export class ReplayRecorder {
   readonly metadata: ReplayMetadata;
   constructor(options: ReplayRecorderOptions = {}) {
     this.metadata = {
-      buildHash: options.buildHash ?? "local-dev",
+      buildHash: options.buildHash ?? (typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'local-dev'),
       combatSchemaHash: options.combatSchemaHash ?? "combat-schema-v1",
       logicFps: options.logicFps ?? 60,
     };

@@ -62,6 +62,14 @@ export class CombatScene extends Phaser.Scene {
   private slowMotionActive = false;
   private debugOverlayVisible = false;
   private playerHitFlashUntil = 0;
+  // F1: FPS regression tracking
+  private fpsSamples: number[] = [];
+  private lowFpsStartTime = 0;
+  private fpsWarningActive = false;
+  private static readonly FPS_LOW_THRESHOLD = 45;
+  private static readonly FPS_WARN_DURATION_MS = 3000;
+  // F2: Tick cost measurement
+  private lastTickCostMs = 0;
   private readonly actorViews = new Map<string, ActorView>();
   private readonly gameplayKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD", "KeyW", "KeyS", "KeyX", "KeyJ", "KeyZ", "KeyK", "KeyC", "KeyL", "Space", "F5", "F6", "F7", "F8", "F9"]);
 
@@ -100,8 +108,29 @@ export class CombatScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const tickStart = performance.now();
     this.simulation.update(delta);
     this.cameraController.tick();
+    this.lastTickCostMs = performance.now() - tickStart;
+
+    // F1: FPS regression tracking
+    const fps = this.game.loop.actualFps ?? 0;
+    this.fpsSamples.push(fps);
+    if (this.fpsSamples.length > 60) this.fpsSamples.shift();
+    if (this.fpsSamples.length >= 30) {
+      const avgFps = this.fpsSamples.reduce((a, b) => a + b, 0) / this.fpsSamples.length;
+      if (avgFps < CombatScene.FPS_LOW_THRESHOLD) {
+        if (this.lowFpsStartTime === 0) this.lowFpsStartTime = performance.now();
+        else if (!this.fpsWarningActive && performance.now() - this.lowFpsStartTime > CombatScene.FPS_WARN_DURATION_MS) {
+          this.fpsWarningActive = true;
+          console.warn(`[FPS] Sustained low FPS: avg=${avgFps.toFixed(1)} over ${((performance.now() - this.lowFpsStartTime) / 1000).toFixed(1)}s (tick=${this.kernel.tickCount})`);
+        }
+      } else {
+        this.lowFpsStartTime = 0;
+        this.fpsWarningActive = false;
+      }
+    }
+
     this.refresh();
   }
 
@@ -123,7 +152,7 @@ export class CombatScene extends Phaser.Scene {
 
   refresh(): void {
     if (!this.kernel) return;
-    const snapshot = this.kernel.debugSnapshot();
+    const snapshot = this.kernel.debugSnapshot(this.lastTickCostMs);
     this.syncActors(snapshot);
     this.syncHudOverlay(snapshot);
     this.debugLayer.sync(this.kernel);
@@ -582,7 +611,7 @@ export class CombatScene extends Phaser.Scene {
       `Player: ${player ? `${player.action ?? "Idle"} @ x=${player.pos.x.toFixed(1)} facing=${this.kernel.player.facing}` : "missing"}`,
       `LastHit: ${snapshot.lastHit.actionName ?? "-"} ${snapshot.lastHit.finalReaction ?? ""} dmg=${snapshot.lastHit.finalDamage ?? 0}`,
       `Scenario: ${scenario}`,
-      `Pool: ${snapshot.performance.poolStatus}`,
+      `TickCost: ${(snapshot.performance.tickCostMs ?? 0).toFixed(1)}ms | Pool: ${snapshot.performance.poolStatus}`,
     ]);
   }
 

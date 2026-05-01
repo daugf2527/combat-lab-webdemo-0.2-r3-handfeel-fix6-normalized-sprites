@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set build hash from git commit
+        run: echo "BUILD_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Phaser import boundary check
         run: |
           echo "Checking src/combat/ for Phaser imports..."
@@ -52,20 +55,29 @@ jobs:
           fi
           echo "OK: No Phaser imports in combat kernel"
 
-      - name: Velocity write location audit
+      - name: Enforce velocity write locations
         run: |
-          echo "Auditing velocity writes in src/combat/..."
-          echo "Current velocity write locations (pre-E-segment):"
+          echo "Checking velocity writes only in allowed files..."
+          ALLOWED="ActorFactory\.ts|CombatKernel\.ts|ReactionResolver\.ts"
+          VIOLATIONS=$(grep -rn "\.velocity\s*[.=]" src/combat/ --include="*.ts" | grep -vE "$ALLOWED" || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "FAIL: velocity writes found outside allowed files:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Allowed files (pre-E-segment):"
+            echo "  - ActorFactory.ts (initialization)"
+            echo "  - CombatKernel.ts updateReactionMotion() (physics)"
+            echo "  - ReactionResolver.ts apply() (launch/stagger/knockback)"
+            exit 1
+          fi
+          echo "OK: All velocity writes in allowed files"
           grep -rn "\.velocity\s*[.=]" src/combat/ --include="*.ts" || echo "  (none found)"
-          echo ""
-          echo "Allowed locations (E-segment: tighten to exactly 4 files):"
-          echo "  - ActorFactory.ts (initialization: velocity: {x:0,z:0,y:0})"
-          echo "  - CombatKernel.ts updateReactionMotion() (physics simulation)"
-          echo "  - ReactionResolver.ts apply() (launch/stagger/knockback velocity)"
-          echo "Velocity audit complete."
 
       - name: Validate sprite sheets
         run: npm run validate:sprites
+
+      - name: Validate asset manifest consistency
+        run: npm run validate:assets
 
       - name: Typecheck
         run: npm run typecheck
@@ -75,6 +87,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify build hash embedded
+        run: |
+          if grep -q "local-dev" dist/assets/*.js 2>/dev/null; then
+            echo "FAIL: 'local-dev' buildHash found in dist bundle — BUILD_HASH not injected"
+            exit 1
+          fi
+          echo "OK: Build hash properly injected"
 
       - name: Upload build and verification artifacts
         uses: actions/upload-artifact@v7

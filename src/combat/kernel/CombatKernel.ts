@@ -608,7 +608,7 @@ export class CombatKernel {
     };
   }
 
-  debugSnapshot(): DebugSnapshot { return this.debug.snapshot(this.tickCount,this.actors,this.lastHit.snapshot,this.bus.archive.length,this.scenario); }
+  debugSnapshot(tickCostMs?: number): DebugSnapshot { return this.debug.snapshot(this.tickCount,this.actors,this.lastHit.snapshot,this.bus.archive.length,this.scenario,tickCostMs); }
   runTicks(n:number): void { for(let i=0;i<n;i++) this.tick(); }
   press(code:string): void { this.inputState.keyDown(code); }
   release(code:string): void { this.inputState.keyUp(code); }

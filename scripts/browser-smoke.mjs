@@ -104,6 +104,51 @@ async function runSmokeTest(server) {
     mkdirSync(verificationDir, { recursive: true });
     await page.screenshot({ path: path.join(verificationDir, "browser-smoke.png") });
     results.push({ check: "screenshot_captured", passed: true });
+
+    // E2: Deterministic screenshot — run scenario and capture pixel hash
+    try {
+      await page.evaluate(() => {
+        const runtime = window.combatLab;
+        if (runtime?.scene?.runScenario) {
+          runtime.scene.runScenario();
+          return true;
+        }
+        return false;
+      });
+      await page.waitForTimeout(500);
+
+      const scenarioPath = path.join(verificationDir, "scenario-screenshot.png");
+      await page.screenshot({ path: scenarioPath });
+
+      const { readFileSync } = await import("node:fs");
+      const { createHash } = await import("node:crypto");
+      const pngData = readFileSync(scenarioPath);
+      const pixelHash = createHash("sha256").update(pngData).digest("hex").slice(0, 16);
+
+      // Golden hash — commit the real hash when visual baseline is stable.
+      // To set: run `npm run browser:smoke`, copy pixelHash from the report, paste below.
+      const GOLDEN_SCENARIO_HASH = "0000000000000000";
+      const hashIsSet = GOLDEN_SCENARIO_HASH !== "0000000000000000";
+      const hashMatch = hashIsSet && pixelHash === GOLDEN_SCENARIO_HASH;
+
+      results.push({
+        check: "scenario_screenshot",
+        passed: !hashIsSet || hashMatch,
+        pixelHash,
+        goldenHash: GOLDEN_SCENARIO_HASH,
+        note: !hashIsSet
+          ? `Golden hash not yet set — captured pixelHash=${pixelHash}. Commit this when visual baseline is stable.`
+          : hashMatch
+            ? "Pixel hash matches golden."
+            : `Pixel hash MISMATCH: got ${pixelHash}, expected ${GOLDEN_SCENARIO_HASH} — visual regression detected.`,
+      });
+      if (!hashIsSet || !hashMatch) {
+        console.log(`[scenario_screenshot] pixelHash=${pixelHash} goldenHash=${GOLDEN_SCENARIO_HASH} note=${results.at(-1)?.note ?? ""}`);
+      }
+    } catch (err) {
+      results.push({ check: "scenario_screenshot", passed: false, error: err.message });
+      passed = false;
+    }
   } catch (err) {
     results.push({ check: "exception", passed: false, error: err.message });
     passed = false;

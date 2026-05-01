@@ -98,3 +98,40 @@ Known constraints:
 - Concise imperative commit subjects: `Fix normalized sprite frame clamp`.
 - PRs should include: change scope, commands run, verification artifacts touched, and screenshots or replay JSON when visual behavior changes.
 - Before claiming completion: run the relevant verification command and summarize the result. Do not edit generated outputs in `dist/`, `.tmp/`, or `verification/` unless the task explicitly concerns those artifacts.
+
+## Automation test infrastructure
+
+The test suite runs via `scripts/static-test.mjs`: TypeScript is compiled with `tsconfig.test.json` into `.tmp/test-js/`, then each `.test.js` file under `tests/static/` is executed as a standalone Node child process. Tests pass by exiting 0 and fail by exiting non-zero or throwing. There is no test framework (no Vitest, Jest, Mocha). Assertions use `node:assert/strict` via `tests/static/test-utils.ts`, which re-exports `ok`, `equal`, and `deepEqual` only. All 29 test files live in `tests/static/*.test.ts`.
+
+Key test files added by the automation plan:
+- `tests/static/fuzz-combat.test.ts` — 50-sequence no-crash fuzz, 40-sequence determinism check, 30-sequence replay JSON validity
+- `tests/static/schema-hash-freshness.test.ts` — computes content hash of 6 data modules, compares against `combatSchemaHash`
+- `tests/static/config-validate.test.ts` — 27 action frame data validation, 14 status type completeness, tuning baseline consistency, cross-file action reference
+
+## Tool call mistakes to avoid
+
+These mistakes were made during the automation plan implementation and wasted significant time. Do not repeat them.
+
+### TaskList takes no parameters
+`TaskList` accepts zero arguments. Calling `TaskList(content="{}")` or `TaskList(content="")` triggers `InputValidationError`. Just call `TaskList()` with no parameters.
+
+### Edit uses snake_case parameter names
+The Edit tool uses `file_path`, `old_string`, `new_string`, `replace_all` — NOT camelCase (`filePath`, `newString`, `oldString`, `replaceAll`). Using camelCase causes `InputValidationError`.
+
+### test-utils.ts only exports ok / equal / deepEqual
+`tests/static/test-utils.ts` re-exports from `node:assert/strict` and only provides `ok`, `equal`, `deepEqual`. There is no `assert.fail()`. Use `throw new Error("message")` instead, or `assert.ok(false, "message")`.
+
+### TypeScript double-cast needed for FrameDataAction
+The `FrameDataAction` type lacks an index signature, so `action as Record<string, unknown>` fails type checking. Use `action as unknown as Record<string, unknown>` (double-cast through `unknown`).
+
+### Node.js built-in modules not available in test tsconfig
+`node:fs`, `node:path`, `node:crypto`, `node:url` are not available in test files because `tsconfig.json` does not include `"types": ["node"]`. Tests that need file-system access should import data modules directly (e.g., `import { ACTIONS } from "../../src/combat/actions/FrameDataAction.js"`) rather than reading files from disk.
+
+### Do not re-read files that haven't changed
+When the system returns "File unchanged since last read — refer to that instead", stop re-reading. Use the content you already have. Repeated re-reads waste conversation turns.
+
+### Negative whiffCancelFrom is intentional
+Actions with `totalFrames=1` (like `Idle`) have `whiffCancelFrom = totalFrames - 4 = -3`. Negative values mean "can never whiff cancel" and are valid. Do not assert `whiffCancelFrom >= 0`. Instead check `whiffCancelFrom <= totalFrames`.
+
+### RagingFury has 10 pillars, not 8
+The tuning baseline file (`dnf-berserker-baseline.ts`) documents 8 pillars, but the actual `FrameDataAction.ts` code has 10 (`[15,17,19,21,23,25,27,29,31,33]`). The baseline is stale — trust the code.
