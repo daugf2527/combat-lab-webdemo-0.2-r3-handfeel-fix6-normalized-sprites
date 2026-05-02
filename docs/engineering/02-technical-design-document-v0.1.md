@@ -1,9 +1,9 @@
-# Technical Design Document v0.1
+# Technical Design Document v0.1 — 碳影 / Carbon Shade
 
-> **Status: Aspirational / Planning Document.** This document describes a desired future architecture. Most modules listed at 0-25% completion remain unimplemented. See `combat-lab-0.2-r3-final-integrated-development-spec.md` for the current authoritative engineering specification.
+> **Status: Superseded.** This document describes a desired future architecture from the project's early planning phase. Most modules listed at 0-25% completion remain unimplemented. **See `combat-lab-0.2-r3-final-integrated-development-spec.md` for the current authoritative engineering specification.** Project is now officially named **碳影 / Carbon Shade** (see `design/01-project-identity.md`).
 >
-> 定位：给程序、TA、运维、AI 开发代理看的施工蓝图。  
-> 当前状态：前端 Web 战斗 Demo 有基础，完整平台架构待补。  
+> 定位：给程序、TA、运维、AI 开发代理看的施工蓝图（早期规划稿）。
+> 当前状态：已被 R3 spec 全面覆盖。本文保留为架构愿景参考，不作为当前工程验收依据。
 > 注意：本文为 v0.1 设计骨架，不代表最终工程已全部实现。
 
 ---

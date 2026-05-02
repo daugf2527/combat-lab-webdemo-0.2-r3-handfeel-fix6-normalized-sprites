@@ -50,3 +50,4 @@ if (!passed) {
   process.exit(1);
 }
 console.log('\nAll sprite sheets validated.');
+process.exit(0);

@@ -6,11 +6,11 @@ This backlog turns the current DFO/DNF research docs into small implementation b
 
 ## References
 
-- Architecture: `docs/research/dnf-combat-system-reconstruction-engineering-report.md`
-- Technical route: `docs/research/dnf-combat-replica-implementation-technical-report.md`
-- Current mechanics gap: `docs/research/dnf-dfo-mechanics-gap-analysis.md`
+- Architecture: `docs/research/combat/dnf-combat-system-reconstruction-engineering-report.md`
+- Technical route: `docs/research/combat/dnf-combat-replica-implementation-technical-report.md`
+- Current mechanics gap: `docs/research/combat/dnf-dfo-mechanics-gap-analysis.md`
 - Action/handfeel plan: `docs/planning/dfo-action-handfeel-replication-plan.md`
-- Online source index: `docs/research/02-neople-dnf-open-api-auxiliary-material.md`
+- Online source index: `docs/research/reference/02-neople-dnf-open-api-auxiliary-material.md`
 
 ## P0: Kernel Contracts ✅
 

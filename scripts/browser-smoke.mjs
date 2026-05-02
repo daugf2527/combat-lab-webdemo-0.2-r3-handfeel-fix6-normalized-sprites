@@ -14,10 +14,10 @@ const PORT = 5173;
 const URL = `http://localhost:${PORT}${BASE_PATH}`;
 
 function startServer() {
-  const server = spawn("npx", ["vite", "--host", "0.0.0.0", "--port", String(PORT)], {
+  const viteBin = path.join(root, "node_modules", "vite", "bin", "vite.js");
+  const server = spawn(process.execPath, [viteBin, "--host", "0.0.0.0", "--port", String(PORT)], {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
-    shell: true,
   });
 
   return new Promise((resolve, reject) => {

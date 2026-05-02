@@ -1,8 +1,8 @@
 # GitHub 开发闭环流程 v0.1
 
-> **Note:** This document was written during the project's initial setup. The AI agent referenced is now **Claude Code** (not ChatGPT). The workflow principles remain valid but the specific tool names are historical.
+> **Note:** This document was written during the project's initial setup. All references to "ChatGPT" below should be read as **Claude Code**. The workflow principles remain valid. The project is now officially named **碳影 / Carbon Shade** (see `design/01-project-identity.md`).
 >
-> 定位：定义本项目后续如何基于 Web Claude Code、虚拟沙箱、GitHub、GitHub Actions 进行开发、验证和交付。  
+> 定位：定义本项目后续如何基于 Claude Code、虚拟沙箱、GitHub、GitHub Actions 进行开发、验证和交付。
 > 原则：GitHub 是源码真源头，GitHub Actions 是真实验收环境，虚拟沙箱只做辅助加工。
 
 ---
@@ -15,7 +15,7 @@
 - 判断产品方向、世界观、玩法优先级
 - 审核最终效果
 
-### Claude Code（文档写作时为 ChatGPT）
+### Claude Code
 
 - 分析截图和问题根因
 - 读取 GitHub 仓库代码
@@ -246,7 +246,7 @@ P0：
 1. 建立 GitHub Actions 基础 CI。
 2. 上传 dist 和 static-test-results。
 3. 修复当前游戏表现问题：怪物 / Boss 闪烁、主角白边、技能闪白、攻击范围表现。
-4. 明确正式项目名或阶段代号。
+4. ~~明确正式项目名或阶段代号。~~ ✅ 已定名：碳影 / Carbon Shade
 
 P1：
 

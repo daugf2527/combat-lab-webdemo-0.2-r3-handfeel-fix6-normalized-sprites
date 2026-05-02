@@ -1,10 +1,10 @@
-# Core Concept Document v0.1
+# Core Concept Document — 碳影 / Carbon Shade
 
-> **Status: v0.1 Draft.** Sections 6 (competitor comparison) and 7 (key metrics) remain incomplete. Core vision, gameplay loops, and target audience definitions are still directionally valid. Project naming was tentative — see `01-project-identity.md` for the official name (碳影 / Carbon Shade).
+> **Status: v0.1 Draft (部分章节过时).** Sections 6 (competitor comparison) and 7 (key metrics) remain incomplete and are now deprioritized — 碳影 is a concept art game, not a commercial product. Core vision, gameplay loops, and target audience definitions remain directionally valid. See `01-project-identity.md` for official naming and `02-concept-art-game-design-v0.1.md` for the definitive design philosophy.
 >
-> 定位：用 1 到 3 页纸描述”做什么游戏、为谁做、为什么能成功”。  
-> 当前状态：概念框架已形成，商业化指标与竞品数据待补。  
-> 项目名：暂定 → 已定名：碳影 / Carbon Shade（见 `01-project-identity.md`）。
+> 定位：用 1 到 3 页纸描述”做什么游戏、为谁做、为什么能成功”。
+> 当前状态：概念框架已形成。商业化指标与竞品数据已非 P0（项目定位为概念艺术游戏）。
+> 项目名：碳影 / Carbon Shade（已定名，见 `01-project-identity.md`）。
 
 ---
 
@@ -284,14 +284,14 @@ AI 代役完成任务
 
 | 模块 | 当前完成度 |
 |---|---:|
-| 核心创意主线 | 70% |
-| 暗线世界观 | 75% |
-| 阳面包装 | 35% |
+| 核心创意主线 | 90% |
+| 暗线世界观 | 80% |
+| 阳面包装 | 50% |
 | 目标受众 | 30% |
 | 核心玩法循环 | 50% |
 | 独特卖点 | 75% |
-| 竞品分析 | 5% |
-| 指标假设 | 0% |
+| 竞品分析 | 5%（非P0） |
+| 指标假设 | 0%（非P0） |
 | 内容生命周期 | 20% |
 | 概念风险 | 65% |
 
@@ -299,9 +299,9 @@ AI 代役完成任务
 
 ## 12. 下一步补充清单
 
-1. 确定正式项目名或阶段性代号。
-2. 补齐阳面世界观：主角为什么出发、世界为什么值得拯救、战斗为何积极。
-3. 做一版竞品对比。
+1. ~~确定正式项目名或阶段性代号。~~ ✅ 已定名：碳影 / Carbon Shade
+2. 补齐阳面世界观：主角为什么出发、世界为什么值得拯救、战斗为何积极（主角定位已确定，明庭形态待定）。
+3. 做一版竞品对比（非P0——概念艺术游戏对竞品分析需求降低）。
 4. 拆出 MVP 玩法范围。
 5. 明确第一版外智任务闭环：建议从 GitHub Actions / PR / 文档产物开始。
-6. 将本 CCD 与 TDD、开发流程文档联动。
+6. 将本 CCD 与 TDD、开发流程文档联动（已部分完成——`02-concept-art-game-design-v0.1.md` 为当前权威设计文档）。

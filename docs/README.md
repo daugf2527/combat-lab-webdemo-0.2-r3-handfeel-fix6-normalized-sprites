@@ -1,6 +1,6 @@
 # Documentation Index
 
-> Last updated: 2026-04-29
+> Last updated: 2026-05-01
 
 This index categorizes all project documentation by status. Navigate by category to find relevant documents.
 
@@ -13,10 +13,12 @@ Documents that accurately describe the present codebase and actively maintained 
 | Document | Description |
 |---|---|
 | `design/01-project-identity.md` | Official naming: 碳影 / Carbon Shade, repo `carbon-shade-web`, core terminology |
+| `design/02-concept-art-game-design-v0.1.md` | Concept art game design philosophy: meta-narrative paradox, three-cycle game design, emotional arc, plugin derivative strategy, project moats & gaps |
 | `design/source-policy.md` | Compliance boundaries: original code only, no DNF/DFO assets |
 | `design/tuning-baseline.md` | Living combat parameter values (currently in use) |
 | `engineering/combat-lab-0.2-r3-final-integrated-development-spec.md` | Master engineering specification — the authoritative spec for the current codebase |
 | `engineering/combat-attack-hit-reaction-chain.md` | Attack → hit → reaction chain (matches current implementation) |
+| `engineering/art-asset-pipeline-spec.md` | Art asset pipeline specification for protagonist sprite generation |
 | `changelog/fix6-normalized-sprite-pipeline.md` | Current rendering pipeline: normalized fixed-cell spritesheets |
 | `planning/04-gap-and-roadmap-v0.1.md` | Living roadmap with updated completion percentages |
 | `planning/dfo-combat-implementation-backlog.md` | P0/P1 complete, P2 partially complete |
@@ -37,8 +39,8 @@ Documents that record past states or approaches that have been replaced by later
 | `changelog/handfeel-fix3-notes.md` | Historical — sprite-reference rendering, hit reactions |
 | `changelog/asset-update-fix4-notes.md` | Partially superseded by fix6 — variable crop-box approach replaced |
 | `changelog/handfeel-fix5-anchor-notes.md` | Superseded by fix6 — `setCrop()` + `setDisplayOrigin()` approach replaced |
-| `design/00-project-mainline-v0.1.md` | Historical — tentative naming, superseded by `01-project-identity.md` |
-| `design/01-core-concept-document-v0.1.md` | v0.1 draft — sections 6 and 7 incomplete, tentative naming |
+| `design/00-project-mainline-v0.1.md` | Historical snapshot — naming is superseded by `01-project-identity.md`, but core narrative (dual-layer, 人群谱系, social/individual layer) remains the narrative foundation |
+| `design/01-core-concept-document-v0.1.md` | v0.1 draft — core vision & gameplay loops still valid; sections 6-7 deprioritized (concept art game, not commercial); naming finalized (碳影/Carbon Shade) |
 
 ---
 
@@ -48,8 +50,8 @@ Documents describing desired future states, planned work, or proposed architectu
 
 | Document | Description |
 |---|---|
-| `engineering/02-technical-design-document-v0.1.md` | Aspirational — describes future 4-layer architecture, most modules at 0-25% |
-| `engineering/03-development-workflow-v0.1.md` | Historical context — written for ChatGPT era, now using Claude Code |
+| `engineering/02-technical-design-document-v0.1.md` | Superseded — superseded by `combat-lab-0.2-r3-final-integrated-development-spec.md`; retained as architecture vision reference |
+| `engineering/03-development-workflow-v0.1.md` | Historical context — written for ChatGPT era; workflow principles still valid; all ChatGPT references should be read as Claude Code |
 | `planning/dnf-combat-systems-master-spec.md` | 79-system taxonomy across P0-P4 for full DNF replication |
 | `planning/dfo-action-handfeel-replication-plan.md` | Living alignment document — tracks pending DFO handfeel items |
 
@@ -57,20 +59,92 @@ Documents describing desired future states, planned work, or proposed architectu
 
 ## Research / Reference
 
-Investigative reports that inform the project but do not describe implemented code.
+Investigative reports and reference material that inform the project but do not describe implemented code. Organized into four subdirectories under `research/` plus one root-level cross-cutting file.
+
+### research/combat/ — DNF Combat Kernel Research (21 source files + audit/index)
+
+DNF/DFO combat system reconstruction, replication, data models, extraction pipeline, frame AI, and mechanics gap analysis. Start with `research/combat/INDEX.md` for reading order and `research/combat/CHAPTER-AUDIT.md` for chapter-level overlap governance.
 
 | Document | Title |
 |---|---|
-| `research/02-neople-dnf-open-api-auxiliary-material.md` | Neople DNF Open API integration design |
-| `research/code-level-dnf-replication-gap-assessment.md` | What can be extracted from public sources |
-| `research/dnf-combat-system-reconstruction-engineering-report.md` | Reverse reconstruction engineering |
-| `research/dnf-combat-replica-implementation-technical-report.md` | Technical route for replication |
-| `research/dnf-dfo-mechanics-gap-analysis.md` | Mechanics gap analysis |
-| `research/dnf-dfo-combat-data-model-and-damage-report.md` | Data model and damage systems |
-| `research/dnf-dfo-combat-extraction-runtime-pipeline-report.md` | Extraction and runtime pipeline |
-| `research/dnf-dfo-combat-frame-ai-implementation-report.md` | Frame AI implementation approach |
-| `research/dnf-dfo-research-vs-current-system-technical-report.md` | Research vs current system gap analysis |
-| `research/dnf-dfo-combat-replication-implementation-report.md` | Overall replication implementation |
-| `research/dnf-dfo-combat-kernel-development-report.md` | Kernel development approach |
-| `research/dnf-dfo-client-data-extraction-report.md` | Client data extraction methodology |
-| `research/dnf-dfo-combat-technical-pipeline-report.md` | Technical pipeline |
+| `research/combat/INDEX.md` | Combat research reading order, document roles, and duplicate-risk tags |
+| `research/combat/CHAPTER-AUDIT.md` | Chapter-level overlap audit and detail-preservation rules |
+| `research/combat/dnf-combat-system-reconstruction-engineering-report.md` | Combat system reverse reconstruction engineering |
+| `research/combat/dnf-combat-replica-implementation-technical-report.md` | Technical route for replication implementation |
+| `research/combat/dnf-dfo-mechanics-gap-analysis.md` | Mechanics gap analysis: current implementation vs reference |
+| `research/combat/dnf-dfo-combat-data-model-and-damage-report.md` | Data model and damage systems |
+| `research/combat/dnf-dfo-combat-extraction-runtime-pipeline-report.md` | Extraction and runtime pipeline |
+| `research/combat/dnf-dfo-combat-frame-ai-implementation-report.md` | Frame AI implementation approach |
+| `research/combat/dnf-dfo-research-vs-current-system-technical-report.md` | Research vs current system gap analysis |
+| `research/combat/dnf-dfo-combat-replication-implementation-report.md` | Overall replication implementation |
+| `research/combat/dnf-dfo-combat-kernel-development-report.md` | Kernel development approach |
+| `research/combat/dnf-dfo-combat-technical-pipeline-report.md` | Technical pipeline report |
+| `research/combat/dnf-dfo-combat-1v1-spec-report.md` | 1v1 combat specification |
+| `research/combat/1v1-combat-system-spec-compact.md` | 1v1 combat system spec (compact) |
+| `research/combat/code-level-dnf-replication-gap-assessment.md` | Code-level replication gap assessment |
+| `research/combat/combat-cleanroom-v2.md` | Combat subsystem clean-room replication |
+| `research/combat/combat-replication-implementation-v1.md` | Combat system replication implementation |
+| `research/combat/combat-replication-implementation-v2.md` | Combat system replication (DFO variant) |
+| `research/combat/combat-replication-scoring.md` | Replication: version boundaries, damage formulas, scoring |
+| `research/combat/combat-replication-tech-report.md` | Replication tech: API→PVF→SKL→NUT→ANI→ATK pipeline |
+| `research/combat/combat-system-implementation-details.md` | Implementation details (thread model, tick, skill stages) |
+| `research/combat/deep-research-combat-system-freeze-replication.md` | Combat system freeze replication study |
+| `research/combat/deep-research-combat-technical-replication.md` | Combat technical replication (raid, party sync, buffs, sets, durability) |
+
+### research/art/ — Art Pipeline & Asset Research (7 files)
+
+NPK/IMG/PVF art pipeline specifications, paper doll compositing, UI/atlas/font systems, and performance budgets.
+
+| Document | Title |
+|---|---|
+| `research/art/deep-research-art-pipeline-dev-guide.md` | Art pipeline development guide |
+| `research/art/deep-research-art-system-dnf-1to1.md` | DNF-style 2D action game art system 1:1 replication |
+| `research/art/deep-research-npk-img-art-pipeline-spec.md` | NPK/IMG art pipeline specification |
+| `research/art/deep-research-paper-doll-avatar-compositor.md` | Paper doll avatar compositor system |
+| `research/art/deep-research-performance-budget-benchmarks.md` | Performance budget benchmarks for art assets |
+| `research/art/deep-research-spk-npk-img-pvf-compatible-replication.md` | SPK/NPK/IMG/PVF compatible replication |
+| `research/art/deep-research-ui-panel-atlas-font.md` | UI panel, atlas, and font system replication |
+
+### research/systems/ — Game Systems Research (7 files)
+
+Core subsystems (equipment/skill/fatigue), hell mode/economy/guild, account/login, character, and town/hub systems.
+
+| Document | Title |
+|---|---|
+| `research/systems/deep-research-core-subsystems-replication.md` | Three core subsystems: equipment growth, skill tree, fatigue/difficulty |
+| `research/systems/deep-research-hell-economy-guild-replication.md` | Classic Hell mode, auction house economy, and guild/party systems |
+| `research/systems/account-login-subsystem.md` | Account and login subsystem (authentication, MFA, launcher) |
+| `research/systems/assets-achievement-subsystem.md` | Assets and achievement subsystem (vault, binding, achievements) |
+| `research/systems/character-subsystems-report.md` | Character-side subsystems (creation, deletion, rename, job, slots) |
+| `research/systems/town-hub-systems.md` | Town/hub systems (lobby, AOI, NPC interaction, dungeon entrance) |
+| `research/systems/town-subsystem-details.md` | Town subsystem details (scenes, channels, player sync, movement) |
+
+### research/reference/ — API & Wiki Reference Docs (16 files)
+
+Neople Open API reference and DFO World Wiki system documentation — raw reference material, not analysis.
+
+| Document | Title |
+|---|---|
+| `research/reference/02-neople-dnf-open-api-auxiliary-material.md` | Neople DNF Open API integration design |
+| `research/reference/reference-api-auction-economy.md` | Auction & economy — Neople Open API |
+| `research/reference/reference-api-character-model.md` | Character data model — Neople Open API |
+| `research/reference/reference-api-items.md` | Item data model — Neople Open API |
+| `research/reference/reference-api-jobs.md` | DNF job tree — Neople Open API |
+| `research/reference/reference-api-skills.md` | Skill data — Neople Open API |
+| `research/reference/reference-dfo-amplification.md` | Amplification (增幅) — DFO World Wiki |
+| `research/reference/reference-dfo-auction.md` | Auction Hall (拍卖行) — DFO World Wiki |
+| `research/reference/reference-dfo-fatigue-points.md` | Fatigue Points (疲劳值) — DFO World Wiki |
+| `research/reference/reference-dfo-guild.md` | Guild (公会) — DFO World Wiki |
+| `research/reference/reference-dfo-hell-mode.md` | Hell Mode (深渊模式) — DFO World Wiki |
+| `research/reference/reference-dfo-party.md` | Party (组队) — DFO World Wiki |
+| `research/reference/reference-dfo-pvp-mechanics.md` | PvP Mechanics — DFO World Wiki |
+| `research/reference/reference-dfo-pvp.md` | PvP (决斗场) — DFO World Wiki |
+| `research/reference/reference-dfo-reinforcement.md` | Reinforcement (强化) — DFO World Wiki |
+| `research/reference/reference-dfo-skill-points.md` | Skill Points (SP) — DFO World Wiki |
+
+### Root-level
+
+| Document | Title |
+|---|---|
+| `research/source-links-appendix.md` | Source links appendix — priority reference links |
+| `documentation-audit-overlap-report.md` | Documentation deduplication audit (2026-05-01) |

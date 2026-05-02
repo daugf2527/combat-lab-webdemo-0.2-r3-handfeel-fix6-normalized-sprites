@@ -52,16 +52,14 @@ Sequential record of handfeel improvement passes:
 - `docs/planning/dfo-action-handfeel-replication-plan.md` — action and handfeel replication plan.
 - `docs/planning/dfo-combat-implementation-backlog.md` — P0/P1/P2 implementation batches for the combat kernel.
 
-### research/ — DNF/DFO combat research
+### research/ — DNF/DFO research & reference
 
-Reference material documenting the research behind the combat kernel:
-- `docs/research/dnf-combat-system-reconstruction-engineering-report.md`, `docs/research/dnf-combat-replica-implementation-technical-report.md` — architecture and technical route.
-- `docs/research/dnf-dfo-mechanics-gap-analysis.md` — gap analysis between current implementation and reference material.
-- `docs/research/dnf-dfo-combat-data-model-and-damage-report.md`, `docs/research/dnf-dfo-combat-extraction-runtime-pipeline-report.md`, `docs/research/dnf-dfo-combat-frame-ai-implementation-report.md` — detailed technical reports.
-- `docs/research/dnf-dfo-research-vs-current-system-technical-report.md` — research vs. current system gap analysis.
-- `docs/research/dnf-dfo-combat-replication-implementation-report.md` — overall replication implementation report.
-- `docs/research/dnf-dfo-combat-kernel-development-report.md`, `docs/research/dnf-dfo-client-data-extraction-report.md`, `docs/research/dnf-dfo-combat-technical-pipeline-report.md` — supplementary implementation reports.
-- `docs/research/02-neople-dnf-open-api-auxiliary-material.md` — Neople DNF Open API reference material.
+Research material organized into four subdirectories:
+- `docs/research/combat/` — DNF combat kernel research (21 files: reconstruction, replication, data models, extraction, AI, frame data, mechanics gap analysis)
+- `docs/research/art/` — Art pipeline & asset research (7 files: NPK/IMG specs, paper doll compositor, UI/atlas/font, performance budgets)
+- `docs/research/systems/` — Game systems research (7 files: core subsystems, hell/economy/guild, account/login, character, town/hub)
+- `docs/research/reference/` — API & wiki reference docs (16 files: Neople Open API, DFO World Wiki system references)
+- `docs/research/source-links-appendix.md` — cross-cutting source links appendix
 
 ## Architecture
 
