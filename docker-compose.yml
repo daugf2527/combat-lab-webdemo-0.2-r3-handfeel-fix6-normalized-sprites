@@ -7,4 +7,5 @@ services:
       - /app/node_modules
     ports:
       - "5173:5173"
+    # Development: Vite dev server with HMR. For production, use Dockerfile directly.
     command: npm run dev
