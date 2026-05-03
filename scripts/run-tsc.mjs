@@ -4,7 +4,6 @@ import path from 'node:path';
 const root = process.cwd();
 const candidates = [
   path.join(root,'node_modules','typescript','bin','tsc'),
-  '/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript/bin/tsc',
   '/usr/local/lib/node_modules/typescript/bin/tsc'
 ];
 const tsc = candidates.find(existsSync);
