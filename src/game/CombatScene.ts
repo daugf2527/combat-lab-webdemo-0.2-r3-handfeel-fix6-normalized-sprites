@@ -260,6 +260,8 @@ export class CombatScene extends Phaser.Scene {
         this.audioGate?.playHit("armor");
         return;
       }
+      if (event.sourceActorId === "player" && decision.hitbox?.id === "rf_shock") this.spawnRagingFuryShockwaveVfx();
+      else if (event.sourceActorId === "player" && decision.hitbox?.id?.startsWith("rf_pillar_")) this.spawnRagingFuryPillarVfx(event.targetActorId, decision.hitbox.id);
       if (decision.hitbox?.id?.startsWith("upslash")) {
         this.audioGate?.playHit("uppercut");
       } else if (decision.hitbox?.id?.startsWith("rf_")) {
@@ -303,17 +305,25 @@ export class CombatScene extends Phaser.Scene {
       });
     });
 
-    this.kernel.bus.on("VfxRequested", event => {
+    this.kernel.bus.on("GrabAttached", event => {
       if (!event.targetActorId) return;
       const actor = this.kernel.actors.find(candidate => candidate.id === event.targetActorId);
       if (!actor) return;
+      this.spawnBloodlustAttachVfx(actor.position.x, this.groundLineY + actor.position.z - actor.position.y - 34);
+    });
+
+    this.kernel.bus.on("VfxRequested", event => {
+      const actorId = event.targetActorId ?? event.sourceActorId;
+      if (!actorId) return;
+      const actor = this.kernel.actors.find(candidate => candidate.id === actorId);
+      if (!actor) return;
       const payload = event.payload as { vfx?: string };
       const baseY = this.groundLineY + actor.position.z - actor.position.y;
-      const effect = this.add.graphics().setDepth(255).setScrollFactor(1);
       const x = actor.position.x;
       const y = baseY - 32;
 
       if (payload.vfx === "armor_spark") {
+        const effect = this.add.graphics().setDepth(255).setScrollFactor(1);
         effect.lineStyle(4, 0xfbbf24, 0.96);
         effect.beginPath();
         effect.moveTo(x - 18, y);
@@ -325,7 +335,13 @@ export class CombatScene extends Phaser.Scene {
         effect.moveTo(x - 13, y + 13);
         effect.lineTo(x + 13, y - 13);
         effect.strokePath();
+        this.fadeGraphics(effect, 140, 1.4);
+      } else if (payload.vfx === "bloodlust_eruption") {
+        this.spawnBloodlustEruptionVfx(x, y, false);
+      } else if (payload.vfx === "bloodlust_whiff_eruption") {
+        this.spawnBloodlustEruptionVfx(x, y, true);
       } else {
+        const effect = this.add.graphics().setDepth(255).setScrollFactor(1);
         effect.lineStyle(4, 0xffffff, 0.96);
         effect.beginPath();
         effect.moveTo(x - 18, y - 2);
@@ -336,17 +352,99 @@ export class CombatScene extends Phaser.Scene {
         effect.moveTo(x - 4, y + 12);
         effect.lineTo(x + 24, y + 2);
         effect.strokePath();
+        this.fadeGraphics(effect, 140, 1.4);
       }
+    });
+  }
 
-      this.tweens.add({
-        targets: effect,
-        alpha: 0,
-        scaleX: 1.4,
-        scaleY: 1.4,
-        duration: 140,
-        ease: "Sine.easeOut",
-        onComplete: () => effect.destroy(),
-      });
+  private spawnBloodlustAttachVfx(x: number, y: number): void {
+    const effect = this.add.graphics().setDepth(254).setScrollFactor(1);
+    effect.lineStyle(3, 0xdc2626, 0.86);
+    effect.strokeEllipse(x, y + 8, 54, 26);
+    effect.lineStyle(2, 0xfca5a5, 0.72);
+    effect.beginPath();
+    effect.moveTo(x - 26, y + 7);
+    effect.lineTo(x - 10, y - 8);
+    effect.lineTo(x + 8, y + 10);
+    effect.lineTo(x + 24, y - 5);
+    effect.strokePath();
+    this.fadeGraphics(effect, 260, 1.18);
+  }
+
+  private spawnBloodlustEruptionVfx(x: number, y: number, whiff: boolean): void {
+    const effect = this.add.graphics().setDepth(256).setScrollFactor(1);
+    effect.fillStyle(0x7f1d1d, whiff ? 0.36 : 0.52);
+    effect.fillEllipse(x, y + 16, whiff ? 86 : 116, whiff ? 32 : 42);
+    effect.lineStyle(whiff ? 3 : 5, 0xef4444, whiff ? 0.78 : 0.94);
+    effect.beginPath();
+    effect.moveTo(x - 44, y + 18);
+    effect.quadraticCurveTo(x - 18, y - 34, x + 10, y - 4);
+    effect.quadraticCurveTo(x + 32, y + 20, x + 58, y - 18);
+    effect.strokePath();
+    effect.lineStyle(2, 0xfca5a5, whiff ? 0.58 : 0.76);
+    effect.beginPath();
+    effect.moveTo(x - 28, y + 8);
+    effect.lineTo(x + 42, y - 22);
+    effect.moveTo(x - 16, y + 24);
+    effect.lineTo(x + 34, y + 4);
+    effect.strokePath();
+    this.fadeGraphics(effect, whiff ? 220 : 300, whiff ? 1.35 : 1.55);
+  }
+
+  private spawnRagingFuryShockwaveVfx(): void {
+    const player = this.kernel.player;
+    const facingSign = player.facing === "left" ? -1 : 1;
+    const x = player.position.x + 52 * facingSign;
+    const y = this.groundLineY + player.position.z - player.position.y - 24;
+    const effect = this.add.graphics().setDepth(252).setScrollFactor(1);
+    effect.fillStyle(0x450a0a, 0.44);
+    effect.fillEllipse(x, y + 18, 132, 30);
+    effect.lineStyle(4, 0xef4444, 0.78);
+    effect.beginPath();
+    effect.moveTo(x - 62 * facingSign, y + 20);
+    effect.lineTo(x + 64 * facingSign, y - 8);
+    effect.moveTo(x - 42 * facingSign, y + 30);
+    effect.lineTo(x + 58 * facingSign, y + 8);
+    effect.strokePath();
+    this.fadeGraphics(effect, 180, 1.28);
+  }
+
+  private spawnRagingFuryPillarVfx(targetActorId: string | undefined, hitboxId: string): void {
+    const target = targetActorId ? this.kernel.actors.find(candidate => candidate.id === targetActorId) : undefined;
+    const player = this.kernel.player;
+    const ordinal = Number.parseInt(hitboxId.slice("rf_pillar_".length), 10);
+    const waveOffset = Number.isFinite(ordinal) ? (ordinal - 5.5) * 5 : 0;
+    const x = (target?.position.x ?? player.position.x + 48) + waveOffset;
+    const y = this.groundLineY + (target?.position.z ?? player.position.z) - (target?.position.y ?? 0) - 40;
+    const height = 74 + (Number.isFinite(ordinal) ? ordinal % 3 : 0) * 8;
+    const effect = this.add.graphics().setDepth(253).setScrollFactor(1);
+    effect.fillStyle(0x7f1d1d, 0.42);
+    effect.fillEllipse(x, y + height / 2, 42, 20);
+    effect.lineStyle(4, 0xdc2626, 0.88);
+    effect.beginPath();
+    effect.moveTo(x - 18, y + height);
+    effect.quadraticCurveTo(x - 8, y + 24, x, y);
+    effect.quadraticCurveTo(x + 12, y + 26, x + 18, y + height);
+    effect.strokePath();
+    effect.lineStyle(2, 0xfca5a5, 0.72);
+    effect.beginPath();
+    effect.moveTo(x - 4, y + height - 6);
+    effect.lineTo(x + 4, y + 16);
+    effect.moveTo(x + 8, y + height - 14);
+    effect.lineTo(x - 8, y + 28);
+    effect.strokePath();
+    this.fadeGraphics(effect, 170, 1.16);
+  }
+
+  private fadeGraphics(effect: Phaser.GameObjects.Graphics, duration: number, scale: number): void {
+    this.tweens.add({
+      targets: effect,
+      alpha: 0,
+      scaleX: scale,
+      scaleY: scale,
+      duration,
+      ease: "Sine.easeOut",
+      onComplete: () => effect.destroy(),
     });
   }
 

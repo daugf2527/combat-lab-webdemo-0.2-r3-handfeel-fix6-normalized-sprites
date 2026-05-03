@@ -35,6 +35,10 @@
 - Quick Rebound 松手后起身霸体从 10F 调整为 18F，即 60fps 下 0.30 秒。
 - Quick Rebound 按住期间保持 invulnerable。
 
+校准注记：
+- 资料里存在 Quick Rebound 按住蹲伏持续时间 2s / 3s 的口径差异；这指向“按住期间无敌/蹲伏最大保持时间”，不是松手后的起身霸体时长。
+- 当前实现里的 18 tick 只表示 60fps 下约 0.30s 的 get-up armor。后续若要校准蹲伏上限，应把 `maxHoldFrames` 与 `getUpArmorUntilTick` 分开做数据化和测试。
+
 待补：
 - 受身持续时间、无敌时间、PvP 修正做成数据表。
 - 被抓、不可抓、霸体、建筑护甲的反馈动画分层。
