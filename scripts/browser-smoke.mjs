@@ -126,6 +126,15 @@ async function runSmokeTest(url) {
       passed = false;
     }
 
+    try {
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(() => Boolean(window.combatLab?.scene && window.combatLab?.kernel), null, { timeout: TIMEOUT_MS });
+      results.push({ check: "combat_scene_ready", passed: true });
+    } catch (err) {
+      results.push({ check: "combat_scene_ready", passed: false, error: err.message });
+      passed = false;
+    }
+
     // Wait for Phaser to finish initializing
     await page.waitForTimeout(4000);
 
