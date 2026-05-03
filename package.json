@@ -11,13 +11,15 @@
     "static:test": "node scripts/static-test.mjs",
     "validate:sprites": "node scripts/validate-sprites.mjs",
     "validate:assets": "node scripts/validate-assets.mjs",
-    "browser:smoke": "node scripts/browser-smoke.mjs"
+    "browser:smoke": "playwright test tests/browser/combat-smoke.spec.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0",
     "vite": "^6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.19.17",
     "playwright": "^1.59.1",
     "typescript": "^5.8.3"
   },
