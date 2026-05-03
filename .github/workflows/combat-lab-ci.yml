@@ -2,8 +2,6 @@ name: Combat Lab CI
 
 on:
   push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
@@ -125,13 +123,13 @@ jobs:
           retention-days: 3
 
       - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: actions/configure-pages@v6
         with:
           enablement: true
 
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
@@ -139,6 +137,7 @@ jobs:
   browser-smoke:
     name: Browser Smoke Test (Playwright)
     needs: verify
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
