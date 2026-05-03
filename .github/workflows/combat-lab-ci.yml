@@ -144,21 +144,19 @@ jobs:
       - name: Run browser smoke test
         run: npm run browser:smoke
 
-      - name: Upload smoke test screenshot
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: browser-smoke-${{ github.run_number }}
-          path: verification/browser-smoke.png
-          if-no-files-found: warn
-          retention-days: 7
+      - name: Assert runtime evidence
+        run: node scripts/assert-runtime-evidence.mjs verification/runtime-evidence.json verification/browser-smoke.json
 
-      - name: Upload smoke test report
+      - name: Upload smoke test artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: browser-smoke-report-${{ github.run_number }}
-          path: verification/browser-smoke.json
+          name: browser-smoke-artifacts-${{ github.run_number }}
+          path: |
+            verification/*.json
+            verification/*.png
+            test-results/
+            playwright-report/
           if-no-files-found: warn
           retention-days: 7
 
