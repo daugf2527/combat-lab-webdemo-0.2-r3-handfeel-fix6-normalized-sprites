@@ -37,6 +37,38 @@ export interface HandfeelState {
   visualRecoilX?: number;
   visualRecoilZ?: number;
 }
+export interface ComboCorrectionState {
+  standGauge: number;
+  airGauge: number;
+  downGauge: number;
+  hitRecoveryGauge: number;
+  comboElapsedFrames: number;
+  framesSinceLastHit: number;
+  comboHitCount: number;
+  lastState: "stand" | "aerial" | "down" | "none";
+  forcedWakeQueued: boolean;
+  gravityScale: number;
+  launchResistance: number;
+  damageScale: number;
+  stunReliefFrames: number;
+  recoveryRuleVersion: string;
+  evasionGauge: number;
+}
+export interface ComboCorrectionConfig {
+  barMax: number;
+  standHitAdd: number;
+  standHeavyBonus: number;
+  airHitAdd: number;
+  airLaunchBonus: number;
+  downHitAdd: number;
+  hitRecoveryAddPerFrame: number;
+  gravityScaleMax: number;
+  launchResistanceMax: number;
+  damageScaleMin: number;
+  maxStunReliefFrames: number;
+  forcedWakeInvulFrames: number;
+  comboResetFrames: number;
+}
 export interface LocomotionState {
   mode: "idle" | "walk" | "run";
   xDirection: -1 | 0 | 1;
@@ -93,6 +125,7 @@ export interface Actor {
   currentAction?: ActionInstance;
   flags: ActorFlags;
   handfeel: HandfeelState;
+  comboCorrection: ComboCorrectionState;
 }
 
 export interface ActionInstance {
@@ -230,11 +263,13 @@ export interface DamageRequest {
   canTriggerDeath: boolean;
   sourceHitDecisionId?: string;
   correlationId: string;
+  attackerStats?: { strength?: number; elementalDamage?: number };
+  targetStats?: { defense?: number };
 }
 export interface DamageApplied { attackerId?: ActorId; targetId: ActorId; actionName?: ActionName; sourceKind: DamageSourceKind; reactionPolicy: DamageReactionPolicy; baseDamage: number; finalDamage: number; hpBefore: number; hpAfter: number; isCounter: boolean; isBackAttack: boolean; isCritical: boolean; multipliers: Array<{name:string; value:number}>; sourceHitDecisionId?: string; sourceStatusId?: string; }
 
 export interface Buff { id: string; type: BuffType; ownerId: ActorId; sourceAction?: ActionName; appliedAtTick: number; expiresAtTick?: number; stacks: number; maxStacks: number; refreshPolicy: "refresh_duration" | "add_stack" | "replace" | "ignore" | "highest_value"; dispelPolicy: "dispellable" | "not_dispellable" | "death_clear" | "death_keep"; modifiers: Array<{key:string; value:number}>; }
-export interface StatusEffect { id: string; type: StatusEffectType; ownerId: ActorId; sourceActorId?: ActorId; sourceAction?: ActionName; appliedAtTick: number; expiresAtTick: number; tickIntervalFrames?: number; nextTickFrame?: number; stacks: number; maxStacks: number; resistanceCheck: { accepted: boolean; reason?: string }; dispelPolicy: "dispellable" | "not_dispellable" | "death_clear" | "death_keep"; }
+export interface StatusEffect { id: string; type: StatusEffectType; ownerId: ActorId; sourceActorId?: ActorId; sourceAction?: ActionName; appliedAtTick: number; expiresAtTick: number; tickIntervalFrames?: number; nextTickFrame?: number; dotDamagePerStack?: number; stacks: number; maxStacks: number; resistanceCheck: { accepted: boolean; reason?: string }; dispelPolicy: "dispellable" | "not_dispellable" | "death_clear" | "death_keep"; }
 
 export interface ScenarioBooleans {
   normalHitObserved: boolean;
