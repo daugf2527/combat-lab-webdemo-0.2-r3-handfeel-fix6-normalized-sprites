@@ -4,8 +4,8 @@ import { DamageFormulaResolver, type DamageFormulaFlags } from "./DamageFormula.
 export class DamageResolver {
   constructor(private readonly formula = new DamageFormulaResolver()) {}
 
-  requestFromHit(decision: HitDecision, correlationId: string, actionName?: ActionName, baseDamageOverride?: number): DamageRequest {
-    return { attackerId:decision.attackerId, targetId:decision.targetId, actionName, sourceKind:actionName==="EnemyBasic" ? "enemy_normal" : "direct_hit", reactionPolicy:"normal_hit_reaction", baseDamage:baseDamageOverride ?? decision.hitbox.baseDamage, canTriggerCounter:true, canTriggerBackAttack:true, canTriggerCritical:true, canTriggerDeath:true, sourceHitDecisionId:decision.id, correlationId };
+  requestFromHit(decision: HitDecision, correlationId: string, actionName?: ActionName, baseDamageOverride?: number, attackerStats?: { strength?: number; elementalDamage?: number }, targetStats?: { defense?: number }): DamageRequest {
+    return { attackerId:decision.attackerId, targetId:decision.targetId, actionName, sourceKind:actionName==="EnemyBasic" ? "enemy_normal" : "direct_hit", reactionPolicy:"normal_hit_reaction", baseDamage:baseDamageOverride ?? decision.hitbox.baseDamage, canTriggerCounter:true, canTriggerBackAttack:true, canTriggerCritical:true, canTriggerDeath:true, sourceHitDecisionId:decision.id, correlationId, attackerStats, targetStats };
   }
   apply(target: Actor, req: DamageRequest, flags: DamageFormulaFlags, damageAllowed=true, extraMultipliers: Array<{name:string; value:number}> = []): DamageApplied {
     const hpBefore = target.resources.hp;
