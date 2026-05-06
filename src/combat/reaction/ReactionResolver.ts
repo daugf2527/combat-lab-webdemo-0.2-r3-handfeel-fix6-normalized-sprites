@@ -21,13 +21,16 @@ export class ReactionResolver {
 
     const hitRecoveryMultiplier = reaction === "armor_feedback_only" ? 1 : target.buffs.find(b=>b.type==="frenzy")?.modifiers.find(modifier => modifier.key === "hit_recovery_received_stun_multiplier")?.value ?? 1;
     applyReactionHandfeel(target, reaction, profile, decision, tick, hitRecoveryMultiplier);
+    if (reaction !== "armor_feedback_only" && profile.hitStunFrames > 0) {
+      target.handfeel.reactionRemaining = Math.max(0, target.handfeel.reactionRemaining - target.comboCorrection.stunReliefFrames);
+    }
     target.handfeel.visualRecoilX = reaction === "armor_feedback_only" ? 0 : Math.min(10, decision?.hitbox.impactSnapX ?? 4) * facingScale;
     target.handfeel.visualRecoilZ = reaction === "armor_feedback_only" ? 0 : Math.min(3, Math.abs(profile.knockbackZ)) * zScale;
     interruptControlForReaction(target, reaction);
 
     if (reaction === "launch") {
       target.position.x += (decision?.hitbox.impactSnapX ?? 4) * facingScale;
-      target.velocity.y = Math.max(target.velocity.y, profile.launchVelocityY);
+      target.velocity.y = Math.max(target.velocity.y, profile.launchVelocityY / target.comboCorrection.launchResistance);
       target.velocity.x = profile.knockbackX * facingScale;
       target.velocity.z = profile.knockbackZ * zScale;
       return;

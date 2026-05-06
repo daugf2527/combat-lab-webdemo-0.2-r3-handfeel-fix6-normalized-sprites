@@ -8,6 +8,9 @@ export type ActionName =
   | "UpwardSlash" | "MountainousWheel" | "RagingFury" | "Bloodlust" | "Backstep"
   | "QuickRebound" | "Derange" | "Diehard" | "DebugReset"
   | "ForceDownPlayer" | "ForceBleed" | "SpawnTargets" | "RunScreenshotScenario"
+  | "GoreCross" | "OutrageBreak" | "ExtremeOverkill" | "RagingFury2"
+  | "BloodRuin" | "BloodSword" | "BurstFury" | "EarthShatter"
+  | "Thirst" | "BloodMemory" | "VimAndVigor"
   | "EnemyBasic";
 export type ActorType = "player" | "enemy" | "dummy" | "boss" | "building";
 export type Faction = "player" | "enemy" | "neutral";
@@ -21,7 +24,7 @@ export type HitType = "slash" | "shockwave" | "blood_pillar" | "grab" | "debug";
 export type HitboxShape = "rect" | "circle" | "sweep" | "grab_attach";
 export type DamageType = "physical" | "status" | "debug";
 export type StatusEffectType = "bleed" | "poison" | "shock" | "burn" | "rupture" | "stun" | "freeze" | "stone" | "bind" | "sleep" | "slow" | "defense_down" | "attack_down" | "curse";
-export type BuffType = "frenzy" | "derange" | "bloody_cross" | "vim_and_vigor" | "diehard";
+export type BuffType = "frenzy" | "derange" | "bloody_cross" | "vim_and_vigor" | "diehard" | "thirst" | "blood_memory";
 
 export interface Vec3 { x: number; z: number; y: number; }
 export interface Rect2D5 { x: number; z: number; y: number; w: number; d: number; h: number; }

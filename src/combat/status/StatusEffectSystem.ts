@@ -13,11 +13,18 @@ interface StatusProfile {
   dispelPolicy: StatusEffect["dispelPolicy"];
 }
 
+interface StatusApplyOptions {
+  durationFrames?: number;
+  tickIntervalFrames?: number;
+  dotDamagePerStack?: number;
+  maxStacks?: number;
+}
+
 const STATUS_PROFILES: Partial<Record<StatusEffectType, StatusProfile>> = {
   bleed: { durationFrames:180, tickIntervalFrames:30, dotDamagePerStack:6, maxStacks:5, dispelPolicy:"death_clear" },
-  poison: { durationFrames:180, tickIntervalFrames:30, dotDamagePerStack:5, maxStacks:5, dispelPolicy:"death_clear" },
-  burn: { durationFrames:180, tickIntervalFrames:30, dotDamagePerStack:5, splashRadius:150, splashDamagePerStack:3, maxStacks:5, dispelPolicy:"death_clear" },
-  shock: { durationFrames:180, tickIntervalFrames:30, dotDamagePerStack:4, maxStacks:5, dispelPolicy:"death_clear" },
+  poison: { durationFrames:300, tickIntervalFrames:30, dotDamagePerStack:5, maxStacks:5, dispelPolicy:"death_clear" },
+  burn: { durationFrames:300, tickIntervalFrames:30, dotDamagePerStack:5, splashRadius:150, splashDamagePerStack:3, maxStacks:5, dispelPolicy:"death_clear" },
+  shock: { durationFrames:600, tickIntervalFrames:60, dotDamagePerStack:4, maxStacks:5, dispelPolicy:"death_clear" },
   rupture: { durationFrames:180, maxStacks:5, dispelPolicy:"death_clear" },
 };
 
@@ -28,15 +35,21 @@ export class StatusEffectSystem {
     return STATUS_PROFILES[type];
   }
 
-  applyStatus(actor: Actor, type: StatusEffectType, sourceActorId: string | undefined, sourceAction: string | undefined, tick: number, bus: CombatEventBus, chance=1): StatusEffect | null {
+  applyStatus(actor: Actor, type: StatusEffectType, sourceActorId: string | undefined, sourceAction: string | undefined, tick: number, bus: CombatEventBus, chance=1, options: StatusApplyOptions = {}): StatusEffect | null {
     const profile = STATUS_PROFILES[type] ?? { durationFrames:180, maxStacks:1, dispelPolicy:"death_clear" as const };
+    const durationFrames = options.durationFrames ?? profile.durationFrames;
+    const tickIntervalFrames = options.tickIntervalFrames ?? profile.tickIntervalFrames;
+    const dotDamagePerStack = options.dotDamagePerStack ?? profile.dotDamagePerStack;
+    const maxStacks = options.maxStacks ?? profile.maxStacks;
     bus.emit("StatusApplyRequested", CombatEventPriority.Status, tick, {actorId:actor.id, type, chance}, {targetActorId:actor.id, sourceActorId});
     if (chance < 1 && Math.random() > chance) { bus.emit("StatusResisted", CombatEventPriority.Status, tick, {actorId:actor.id, type, reason:"chance_failed"}, {targetActorId:actor.id}); return null; }
     const existing = actor.statusEffects.find(s=>s.type===type);
     if (existing) {
       existing.stacks = Math.min(existing.maxStacks, existing.stacks + 1);
-      existing.expiresAtTick = tick + profile.durationFrames;
-      if (profile.tickIntervalFrames !== undefined && existing.nextTickFrame === undefined) existing.nextTickFrame = tick + profile.tickIntervalFrames;
+      existing.expiresAtTick = tick + durationFrames;
+      existing.tickIntervalFrames = tickIntervalFrames;
+      existing.dotDamagePerStack = dotDamagePerStack;
+      if (tickIntervalFrames !== undefined && existing.nextTickFrame === undefined) existing.nextTickFrame = tick + tickIntervalFrames;
       bus.emit("StatusApplied", CombatEventPriority.Status, tick, {actorId:actor.id, type, stacks:existing.stacks}, {targetActorId:actor.id, sourceActorId});
       return existing;
     }
@@ -47,19 +60,20 @@ export class StatusEffectSystem {
       sourceActorId,
       sourceAction:sourceAction as ActionName,
       appliedAtTick:tick,
-      expiresAtTick:tick+profile.durationFrames,
-      tickIntervalFrames:profile.tickIntervalFrames,
-      nextTickFrame:profile.tickIntervalFrames === undefined ? undefined : tick+profile.tickIntervalFrames,
+      expiresAtTick:tick+durationFrames,
+      tickIntervalFrames,
+      nextTickFrame:tickIntervalFrames === undefined ? undefined : tick+tickIntervalFrames,
+      dotDamagePerStack,
       stacks:1,
-      maxStacks:profile.maxStacks,
+      maxStacks,
       resistanceCheck:{accepted:true},
       dispelPolicy:profile.dispelPolicy
     };
     actor.statusEffects.push(effect); bus.emit("StatusApplied", CombatEventPriority.Status, tick, {actorId:actor.id, type, statusId:effect.id}, {targetActorId:actor.id, sourceActorId}); return effect;
   }
 
-  applyBleed(actor: Actor, sourceActorId: string | undefined, sourceAction: string | undefined, tick: number, bus: CombatEventBus, chance=1): StatusEffect | null {
-    return this.applyStatus(actor, "bleed", sourceActorId, sourceAction, tick, bus, chance);
+  applyBleed(actor: Actor, sourceActorId: string | undefined, sourceAction: string | undefined, tick: number, bus: CombatEventBus, chance=1, options: StatusApplyOptions = {}): StatusEffect | null {
+    return this.applyStatus(actor, "bleed", sourceActorId, sourceAction, tick, bus, chance, options);
   }
   tick(actor: Actor, tick: number, bus: CombatEventBus, frozen: boolean, actors: Actor[] = [actor]): boolean {
     if (frozen) return false;
@@ -69,7 +83,7 @@ export class StatusEffectSystem {
       const profile = STATUS_PROFILES[s.type];
       if (profile?.dotDamagePerStack !== undefined && s.nextTickFrame !== undefined && s.nextTickFrame <= tick) {
         bus.emit("StatusTickRequested", CombatEventPriority.Status, tick, {actorId:actor.id, statusId:s.id, type:s.type}, {targetActorId:actor.id, sourceActorId:s.sourceActorId});
-        const applied = this.applyDotDamage(actor, s, profile.dotDamagePerStack * s.stacks, tick, bus);
+        const applied = this.applyDotDamage(actor, s, (s.dotDamagePerStack ?? profile.dotDamagePerStack) * s.stacks, tick, bus);
         if (profile.splashRadius !== undefined && profile.splashDamagePerStack !== undefined) this.applySplash(actor, s, profile, actors, tick, bus);
         bus.emit("StatusTicked", CombatEventPriority.Status, tick, {actorId:actor.id, statusId:s.id, type:s.type, damage:applied.finalDamage}, {targetActorId:actor.id, sourceActorId:s.sourceActorId});
         s.nextTickFrame += s.tickIntervalFrames ?? profile.tickIntervalFrames ?? 30;

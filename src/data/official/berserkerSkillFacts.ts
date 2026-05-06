@@ -1,0 +1,37 @@
+export const officialBerserkerSkillFacts = {
+  UpwardSlash: {
+    source: "neople_api",
+    skillId: "fc7a3f4c2852c832a2f20af63d5d212f",
+    level: 1,
+    damagePercent: 190,
+    launchForcePercent: 131.4,
+  },
+  MountainousWheel: {
+    source: "neople_api",
+    skillId: "6e33d47e6622ce03b6defdd912140270",
+    level: 1,
+    downwardDamagePercent: 443,
+    downwardHitCount: 3,
+    shockwaveDamagePercent: 2498,
+    minRangePercent: 128,
+    maxRangePercent: 192,
+  },
+  RagingFury: {
+    source: "neople_api",
+    skillId: "506e7ed77d517419a6e1c437a2cedb17",
+    level: 1,
+    shockwaveDamagePercent: 3345,
+    bloodPillarDamagePercent: 1275,
+    bloodPillarHitCount: 10,
+  },
+  Bloodlust: {
+    source: "neople_api",
+    skillId: "3829c15bf5f520c13998a3479ba0ce7b",
+    level: 1,
+    grabDamagePercent: 1520,
+    eruptionDamagePercent: 2876,
+    bleedingTargetBonusDamagePercent: 4922,
+    bleedDurationSeconds: 3,
+    ungrabbableTargetEruptionDamagePercent: 7944,
+  },
+} as const;

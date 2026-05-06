@@ -7,13 +7,25 @@ for (const type of ["bleed", "poison", "burn", "shock"] as const) {
   k.status.applyStatus(target, type, k.player.id, "ForceBleed", k.tickCount, k.bus, 1);
   const hpBefore = target.resources.hp;
   const reactionBefore = target.reactionState;
-  k.status.tick(target, 30, k.bus, false, k.actors);
+  k.status.tick(target, k.status.profile(type)?.tickIntervalFrames ?? 30, k.bus, false, k.actors);
   k.bus.drainAll();
   const dot = k.bus.archive.find(e => e.type === "DamageApplied" && e.targetActorId === target.id && (e.payload as any).sourceKind === "status_dot")?.payload as any;
   assert.ok(dot, `${type} should emit DOT damage`);
   assert.equal(dot.reactionPolicy, "status_tick_feedback_only", `${type} tick must not request normal hit reaction`);
   assert.ok(target.resources.hp < hpBefore, `${type} tick should reduce HP`);
   assert.equal(target.reactionState, reactionBefore, `${type} tick should not change hit reaction`);
+}
+
+{
+  const k = new CombatKernel();
+  assert.equal(k.status.profile("bleed")?.durationFrames, 180, "DFO wiki Bleed duration should be 3s at 60Hz");
+  assert.equal(k.status.profile("bleed")?.tickIntervalFrames, 30, "DFO wiki Bleed tick interval should be 0.5s at 60Hz");
+  assert.equal(k.status.profile("poison")?.durationFrames, 300, "DFO wiki Poison duration should be 5s at 60Hz");
+  assert.equal(k.status.profile("poison")?.tickIntervalFrames, 30, "DFO wiki Poison tick interval should be 0.5s at 60Hz");
+  assert.equal(k.status.profile("burn")?.durationFrames, 300, "DFO wiki Burn duration should be 5s at 60Hz");
+  assert.equal(k.status.profile("burn")?.tickIntervalFrames, 30, "DFO wiki Burn tick interval should be 0.5s at 60Hz");
+  assert.equal(k.status.profile("shock")?.durationFrames, 600, "DFO wiki Shock duration should be 10s at 60Hz");
+  assert.equal(k.status.profile("shock")?.tickIntervalFrames, 60, "DFO wiki Shock tick interval should be 1s at 60Hz");
 }
 
 {

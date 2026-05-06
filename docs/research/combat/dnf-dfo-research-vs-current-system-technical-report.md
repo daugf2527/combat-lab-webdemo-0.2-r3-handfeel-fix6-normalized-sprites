@@ -134,7 +134,7 @@
 
 - Raging Fury 10 个 blood pillar hit windows。
 - Quick Rebound 松手后 18 tick get-up armor。
-- Frenzy 支持技能 20% cooldown reduction。
+- Frenzy 支持技能 cooldown reduction 已按 Neople API level-1 样本更新为 10%。
 - Frenzy 开启 HP cost。
 - Frenzy skill attack multiplier。
 - run + X -> `DashAttack`。

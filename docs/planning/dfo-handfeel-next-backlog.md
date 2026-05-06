@@ -18,8 +18,8 @@
 
 - `Bloodlust` 已有成功抓取、`grabbed` hold、`grab_attach` 喷发释放、grab-immune fallback、whiff eruption event。
 - `RagingFury` 已有 10 个 blood pillar hit windows，并通过 `dfo-replica` 静态测试保护。
-- `QuickRebound` 当前实现为松手后 18 tick get-up armor；资料中存在 2s/3s 持续时间口径差异，尚未校准。
-- `Frenzy` 当前支持 Berserker 技能 20% cooldown reduction 和技能攻击倍率；新资料里的 10% 表述先标记为冲突，不回写实现。
+- `QuickRebound` 当前实现为 level 1 官方 API 对齐：最长 180 tick invulnerability、松手后 18 tick get-up armor、300 tick cooldown、MP 1。更高等级 scaling 尚未接入。
+- `Frenzy` 当前支持 Berserker 技能 10% cooldown reduction，按 Neople 官方 API 样本更新；技能攻击、HP cost/upkeep 仍需完整 level-table 驱动。
 
 ## P0: Bloodlust Runtime Readability ✅
 

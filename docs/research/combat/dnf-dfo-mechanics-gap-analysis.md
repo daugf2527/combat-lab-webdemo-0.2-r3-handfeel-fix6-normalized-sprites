@@ -24,7 +24,7 @@ Primary links:
 
 - QuickRebound entry condition is close: downed state plus C/Jump pressed edge, maintained by held key.
 - RagingFury is correctly not a single radial hit: it has a shockwave plus 10 blood-pillar hit groups.
-- Frenzy has activation HP cost, real upkeep HP drain that pauses during HitStop, swaps basic attack routing to Frenzy basics, reduces supported Berserker cooldowns by 20%, adds a replay-visible skill attack multiplier for supported Berserker actions, shortens incoming stagger recovery, and restores HP after killing a bleeding target.
+- Frenzy has activation HP cost, upkeep HP drain that pauses during HitStop, swaps basic attack routing to Frenzy basics, reduces supported Berserker cooldowns by the Neople API level-1 sample value of 10%, adds a replay-visible skill attack multiplier for supported Berserker actions, shortens incoming stagger recovery, and restores HP after killing a bleeding target.
 - The baseline movement/action layer now includes DashAttack, Jump, and JumpAttack routes.
 - Bloodlust has a baseline grab hitbox plus grab-immune damage fallback with replay-visible grab success/failure events.
 - Bleed DOT is separated from normal hit reaction through `sourceKind=status_dot` and `reactionPolicy=status_tick_feedback_only`.
@@ -39,7 +39,7 @@ Primary links:
 
 4. Vim and Vigor/Bleed relationship now has a source gate for RagingFury. Remaining work is making Vim and Vigor a learned/passive profile instead of a manually applied buff in tests.
 
-5. Derange, Diehard, BloodyCross, and later Berserker passives are placeholders compared with DFO behavior. Diehard should be low-HP gated healing/defense/recovery logic, not just an action shell.
+5. Derange, Diehard, and BloodyCross now have level-1 official API values wired as minimal buff/action behavior. They still need full level-table profiles, mode split, and exact runtime stat integration beyond replay-visible modifiers.
 
 6. Grab-immune handling has a Bloodlust-style fallback discharge baseline. Remaining work is the full held-target animation/state, not the damage fallback.
 
