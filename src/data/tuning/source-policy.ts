@@ -1,1 +1,1 @@
-export const sourcePolicy = { prohibited:["official assets","leaked source","private server code","client decompilation"], allowed:["original code","placeholder graphics","public mechanic descriptions","baseline tuning"] } as const;
+export const sourcePolicy = { prohibited:["official assets","leaked source","private server code","client decompilation"], allowed:["original code","placeholder graphics","Neople official API facts","DFO-specific wiki/reference facts with conflict checks","public mechanic descriptions","baseline tuning"] } as const;

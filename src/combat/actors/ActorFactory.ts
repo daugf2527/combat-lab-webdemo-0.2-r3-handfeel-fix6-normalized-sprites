@@ -1,6 +1,7 @@
 import type { Actor, ArmorProfile, ActorType, Faction } from "../types.js";
 import { cloneVec3 } from "../util/geometry.js";
 import { cloneEnemyTuning, enemyTuning } from "../../data/ai/enemyTuning.js";
+import { createComboCorrectionState } from "../combo/ComboCorrection.js";
 
 function armor(baseType: ArmorProfile["baseType"]): ArmorProfile {
   if (baseType === "building_armor") {
@@ -68,6 +69,7 @@ export function createActor(id: string, type: ActorType, faction: Faction, x: nu
   const hurtDepth = id === "boss" ? 30 : id === "imp" ? 18 : 22;
   const hurtHeight = id === "boss" ? 118 : id === "imp" ? 42 : id === "dummy" ? 50 : 48;
   const hurtOffsetY = id === "boss" ? 58 : id === "imp" ? 60 : 26;
+  const mp = faction === "player" ? 1000 : 100;
 
   return {
     id,
@@ -80,7 +82,7 @@ export function createActor(id: string, type: ActorType, faction: Faction, x: nu
     facing: faction === "player" ? "right" : "left",
     pushBox: { w: pushWidth, d: pushDepth, immovable: type === "building" },
     hurtBoxes: [{ offset: { x: 0, z: 0, y: hurtOffsetY }, w: hurtWidth, d: hurtDepth, h: hurtHeight }],
-    resources: { hp, maxHp: hp, mp: 100, maxMp: 100, cube: 3 },
+    resources: { hp, maxHp: hp, mp, maxMp: mp, cube: 3 },
     cooldowns: { remaining: new Map(), globalRemaining: 0 },
     buffs: [],
     statusEffects: [],
@@ -90,6 +92,7 @@ export function createActor(id: string, type: ActorType, faction: Faction, x: nu
     ai: tuning,
     flags: { dead: false, playerControlled: faction === "player" },
     handfeel: { reactionRemaining: 0, downRemaining: 0, getUpRemaining: 0, visualRecoilRemaining: 0, visualRecoilX: 0, visualRecoilZ: 0 },
+    comboCorrection: createComboCorrectionState(),
   };
 }
 
@@ -108,6 +111,7 @@ export function cloneActorSnapshot(actor: Actor): object {
     visualRecoilRemaining: actor.handfeel.visualRecoilRemaining ?? 0,
     visualRecoilX: actor.handfeel.visualRecoilX ?? 0,
     visualRecoilZ: actor.handfeel.visualRecoilZ ?? 0,
+    comboCorrection: { ...actor.comboCorrection },
     buffs: actor.buffs.map(buff => ({ type: buff.type, stacks: buff.stacks, expiresAtTick: buff.expiresAtTick })),
     status: actor.statusEffects.map(status => ({ type: status.type, stacks: status.stacks, nextTickFrame: status.nextTickFrame })),
   };

@@ -21,6 +21,12 @@ Browser screenshot verification scripts are intentionally excluded from npm comm
 
 All design, planning, and research decisions are stored in `docs/`. This is the project's long-term knowledge base — consult it before making architectural changes. Documents are organized into five functional directories. See `docs/README.md` for a navigable index categorized by status (current, historical, aspirational, research).
 
+## DNF/DFO reference truth rule
+
+Neople official API verification is the first golden standard for any DNF/DFO field it exposes. DFO-specific wiki references such as DFO World are the second golden standard for fields that official API/pages do not expose, after checking freshness and conflicts. Before changing DNF-aligned skill numbers, cooldowns, level tables, hit counts, job/skill IDs, MP costs, option values, or official skill text, verify against the official API or an archived official-API snapshot with provenance first; then use DFO-specific wiki data only where official sources are silent. Local tuning in `docs/design/tuning-baseline.md` is fallback baseline, not official truth.
+
+Do not overclaim API or wiki coverage: startup/active/recovery frames, hitbox/hurtbox geometry, launch/gravity curves, combo-protection thresholds, server authority, and network sync are not provided by the Open API or ordinary wiki pages unless another official source explicitly backs them. Wikipedia/general encyclopedias are background-only; do not use them for combat numbers, frame data, hitboxes, damage formulas, skill scaling, AI behavior, or live balance values. Never commit `NEOPLE_API_KEY`; use environment variables or a backend proxy only.
+
 ### design/ — Project design & identity
 
 - `docs/design/00-project-mainline-v0.1.md` — mainline world/theme draft with dual-layer narrative (bright surface + AI-era dark line).

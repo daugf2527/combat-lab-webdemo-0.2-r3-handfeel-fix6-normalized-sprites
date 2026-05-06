@@ -15,7 +15,7 @@
 已对齐：
 - Raging Fury 从 8 个血柱改为当前 DFO 参考的 10 个血柱，血柱使用独立 hit group，便于回放和多段命中诊断。
 - 血柱浮空降低，避免多段期间把目标过早推出柱范围。
-- Frenzy 下支持职业技能冷却 20% 减免，当前接入 `RagingFury` 与 `Bloodlust`。
+- Frenzy 下支持职业技能冷却 10% 减免，按 Neople 官方 API level-1 样本接入 `RagingFury` 与 `Bloodlust` 等支持动作。
 - Frenzy 开启时支付一次 HP 成本；持续 HP 消耗继续在 HitStop 中暂停。
 - Frenzy 对支持的 Berserker 动作提供技能攻击力倍率，并在 `DamageApplied.multipliers` 中记录 `frenzy_skill_attack`。
 - Frenzy 受击时缩短普通硬直恢复，用 buff modifier 驱动，保持回放可追踪。

@@ -21,7 +21,8 @@ export class CooldownResourceKernel {
   start(actor:Actor, action:FrameDataAction, tick:number, bus:CombatEventBus): void {
     const cp=action.cooldownProfile;
     if(!cp) return;
-    const frenzyReduction = cp.canBeReducedByFrenzy && actor.buffs.some(b=>b.type==="frenzy") ? 0.8 : 1;
+    const cooldownReduction = cp.canBeReducedByFrenzy ? actor.buffs.find(b=>b.type==="frenzy")?.modifiers.find(modifier => modifier.key === "berserker_cooldown_reduction")?.value ?? 0 : 0;
+    const frenzyReduction = 1 - cooldownReduction;
     const independentCooldownFrames = Math.max(1, Math.floor(cp.independentCooldownFrames * frenzyReduction));
     actor.cooldowns.remaining.set(action.actionName, independentCooldownFrames);
     actor.cooldowns.globalRemaining = Math.max(actor.cooldowns.globalRemaining, cp.globalCooldownFrames);

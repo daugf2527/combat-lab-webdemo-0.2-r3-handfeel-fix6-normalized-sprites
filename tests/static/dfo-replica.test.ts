@@ -24,7 +24,7 @@ assert.equal(quick.player.armorProfile.temporaryFlags.getUpArmorUntilTick, quick
 const frenzyCd = new CombatKernel();
 frenzyCd.buffs.apply(frenzyCd.player, "frenzy", frenzyCd.tickCount, frenzyCd.bus);
 assert.equal(frenzyCd.requestAction(frenzyCd.player, "RagingFury"), true);
-assert.equal(frenzyCd.player.cooldowns.remaining.get("RagingFury"), 72, "Frenzy should reduce supported Berserker skill cooldowns by 20%");
+assert.equal(frenzyCd.player.cooldowns.remaining.get("RagingFury"), 702, "Frenzy should reduce supported Berserker skill cooldowns by the official 10% sample value");
 
 const frenzyActivation = new CombatKernel();
 const activationHp = frenzyActivation.player.resources.hp;
@@ -135,6 +135,16 @@ withVim.buffs.apply(withVim.player, "vim_and_vigor", withVim.tickCount, withVim.
 withVim.requestAction(withVim.player, "RagingFury");
 withVim.runTicks(18);
 assert.equal(withVimGrunt.statusEffects.some(s => s.type === "bleed"), true, "Vim and Vigor should allow RagingFury to apply Bleed");
+
+const withVimMountainous = new CombatKernel();
+const withVimMountainousGrunt = withVimMountainous.actors.find(a => a.id === "grunt")!;
+withVimMountainousGrunt.position.x = withVimMountainous.player.position.x + 80;
+withVimMountainous.buffs.apply(withVimMountainous.player, "vim_and_vigor", withVimMountainous.tickCount, withVimMountainous.bus);
+withVimMountainous.requestAction(withVimMountainous.player, "MountainousWheel");
+withVimMountainous.runTicks(22);
+assert.equal(withVimMountainousGrunt.statusEffects.some(s => s.type === "bleed"), true, "Vim and Vigor should add Bleed to eligible Berserker post-class skills such as MountainousWheel");
+const vimBleed = withVimMountainousGrunt.statusEffects.find(s => s.type === "bleed");
+assert.equal(vimBleed?.expiresAtTick, withVimMountainous.tickCount - 6 + 420, "Vim and Vigor level 1 official Bleed duration should be 7s at 60Hz");
 
 const frenzyHeal = new CombatKernel();
 const bleedingTarget = frenzyHeal.actors.find(a => a.id === "grunt")!;

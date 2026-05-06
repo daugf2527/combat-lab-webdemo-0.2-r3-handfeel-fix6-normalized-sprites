@@ -24,6 +24,7 @@ import { LastHitTrace } from "../debug/LastHitTrace.js";
 import { DebugOverlay, type DebugSnapshot } from "../debug/DebugOverlay.js";
 import { ReplayRecorder } from "../replay/ReplayRecorder.js";
 import { EnemyAIController } from "../ai/EnemyAI.js";
+import { DEFAULT_COMBO_CORRECTION_CONFIG, applyComboCorrectionFromHit, hasComboCorrectionPressure, resetComboCorrectionState } from "../combo/ComboCorrection.js";
 
 export interface CombatKernelOptions { enableReplay?: boolean; }
 
@@ -146,6 +147,7 @@ export class CombatKernel {
     this.updateReactionMotion();
 
     for (const a of this.actors) {
+      this.tickComboCorrection(a);
       if (a.handfeel.hitFlashRemaining && a.handfeel.hitFlashRemaining > 0) a.handfeel.hitFlashRemaining -= 1;
       if (a.handfeel.visualRecoilRemaining && a.handfeel.visualRecoilRemaining > 0) a.handfeel.visualRecoilRemaining -= 1;
       if (this.status.tick(a, this.tickCount, this.bus, this.hitStop.isFrozen(a.id), this.actors)) this.scenario.bleedObserved = true;
@@ -258,8 +260,6 @@ export class CombatKernel {
     if(actionName==="ForceDownPlayer") return this.applyDebugAction(actor, actionName, () => { actor.reactionState="downed"; return true; });
     if(actionName==="ForceBleed") return this.applyDebugAction(actor, actionName, () => { this.status.applyBleed(this.actors.find(a=>a.id==="grunt") ?? actor, actor.id, "ForceBleed", this.tickCount, this.bus, 1); return true; });
     if(actionName==="RunScreenshotScenario") { const scenario=this.runDeterministicScenario(); this.bus.emit("DebugActionApplied", CombatEventPriority.Debug, this.tickCount, {actorId:actor.id, actionName, source:"debug", scenario}, {sourceActorId:actor.id, targetActorId:actor.id}); return true; }
-    if(actionName==="FrenzyToggle") { if(actor.buffs.some(b=>b.type==="frenzy")) this.buffs.remove(actor,"frenzy",this.tickCount,this.bus); else this.buffs.apply(actor,"frenzy",this.tickCount,this.bus); return true; }
-    if(actionName==="Derange") this.buffs.apply(actor,"derange",this.tickCount,this.bus,180);
 
     const resolvedActionName = this.resolveRequestedAction(actor, actionName);
     if (!resolvedActionName) {
@@ -271,6 +271,10 @@ export class CombatKernel {
     const lockedFacing = facing ?? actor.facing;
     const action = getAction(resolvedActionName);
     this.bus.emit("ActionRequested", CombatEventPriority.ResourceCooldown, this.tickCount, {actorId:actor.id, actionName:resolvedActionName}, {targetActorId:actor.id});
+    if (resolvedActionName === "Diehard" && !this.buffs.canApplyDiehard(actor)) {
+      this.bus.emit("ActionRequested", CombatEventPriority.ResourceCooldown, this.tickCount, {actorId:actor.id, actionName:resolvedActionName, rejected:"hp_threshold", hp:actor.resources.hp, maxHp:actor.resources.maxHp}, {targetActorId:actor.id});
+      return false;
+    }
     if(!this.cooldowns.gate(actor, action, this.tickCount, this.bus)) return false;
 
     actor.currentAction = {
@@ -299,7 +303,19 @@ export class CombatKernel {
     this.bus.emit("ActionEntered", CombatEventPriority.ResourceCooldown, this.tickCount, {actorId:actor.id, actionName:resolvedActionName}, {targetActorId:actor.id});
     if(action.cooldownProfile?.cooldownStartsAt === "on_action_enter") this.cooldowns.start(actor, action, this.tickCount, this.bus);
     if(action.costProfile?.costTiming === "on_startup") this.cooldowns.pay(actor, action, this.tickCount, this.bus);
+    this.applyInstantActionEffect(actor, resolvedActionName);
     return true;
+  }
+
+  private applyInstantActionEffect(actor: Actor, actionName: ActionName): void {
+    if(actionName==="FrenzyToggle") {
+      if(actor.buffs.some(b=>b.type==="frenzy")) this.buffs.remove(actor,"frenzy",this.tickCount,this.bus);
+      else this.buffs.apply(actor,"frenzy",this.tickCount,this.bus);
+    } else if(actionName==="Derange") {
+      this.buffs.applyDerange(actor,this.tickCount,this.bus);
+    } else if(actionName==="Diehard") {
+      this.buffs.applyDiehard(actor,this.tickCount,this.bus);
+    }
   }
 
   private canCancelInto(actor: Actor, actionName: ActionName): boolean {
@@ -433,6 +449,9 @@ export class CombatKernel {
       return;
     }
 
+    const forceStandKnockdown = this.shouldForceStandKnockdown(target, decision);
+    if (forceStandKnockdown && decision.armorDecision) decision.armorDecision.finalReaction = "downed";
+    this.updateComboCorrection(target, decision, corr);
     const targetWasBleeding = target.statusEffects.some(s => s.type === "bleed");
     const req=this.damageResolver.requestFromHit(decision,corr,attacker.currentAction?.actionName, attacker.ai?.damage);
     this.bus.emit("DamageRequested", CombatEventPriority.Damage, this.tickCount, req, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
@@ -446,6 +465,13 @@ export class CombatKernel {
       this.bus.emit("ReactionRequested", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId:corr});
       this.reactionResolver.apply(target,finalReaction,decision,attacker,this.tickCount);
       this.bus.emit("ReactionApplied", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId:corr});
+      if (forceStandKnockdown) {
+        this.bus.emit("ComboStandKnockdown", CombatEventPriority.Reaction, this.tickCount, {
+          targetId: target.id,
+          state: { ...target.comboCorrection },
+        }, {targetActorId:target.id, correlationId:corr});
+      }
+      this.applyForcedWakeIfQueued(target, corr);
 
       const action=getAction(attacker.currentAction?.actionName ?? "Idle");
       const controlBlocked = decision.armorDecision?.controlBlocked === true;
@@ -478,8 +504,63 @@ export class CombatKernel {
       this.applyFrenzyBleedKillRestore(attacker, targetWasBleeding);
       this.death.kill(target,this.tickCount,this.bus,undefined,corr);
     }
-    if(req.actionName==="RagingFury" && decision.hitbox.hitType==="blood_pillar" && attacker.buffs.some(b=>b.type==="vim_and_vigor")) this.status.applyBleed(target,attacker.id,"RagingFury",this.tickCount,this.bus,1);
+    this.applyVimAndVigorBleed(attacker, target, req.actionName);
     this.updateScenarioFlags(decision, finalReaction, damage);
+  }
+
+  private updateComboCorrection(target: Actor, decision: HitDecision, correlationId: string): void {
+    const update = applyComboCorrectionFromHit(target.comboCorrection, target.reactionState, decision);
+    this.bus.emit("ComboCorrectionUpdated", CombatEventPriority.HitDecision, this.tickCount, {
+      targetId: target.id,
+      bucket: update.bucket,
+      standAdded: update.standAdded,
+      airAdded: update.airAdded,
+      downAdded: update.downAdded,
+      hitRecoveryAdded: update.hitRecoveryAdded,
+      state: { ...target.comboCorrection },
+    }, {targetActorId:target.id, correlationId});
+  }
+
+  private tickComboCorrection(actor: Actor): void {
+    if (!hasComboCorrectionPressure(actor.comboCorrection)) return;
+    actor.comboCorrection.comboElapsedFrames += 1;
+    actor.comboCorrection.framesSinceLastHit += 1;
+    if (actor.comboCorrection.framesSinceLastHit <= DEFAULT_COMBO_CORRECTION_CONFIG.comboResetFrames) return;
+    resetComboCorrectionState(actor.comboCorrection);
+    this.bus.emit("ComboCorrectionReset", CombatEventPriority.HitDecision, this.tickCount, {
+      targetId: actor.id,
+      reason: "timeout",
+      comboResetFrames: DEFAULT_COMBO_CORRECTION_CONFIG.comboResetFrames,
+      state: { ...actor.comboCorrection },
+    }, {targetActorId:actor.id});
+  }
+
+  private shouldForceStandKnockdown(target: Actor, decision: HitDecision): boolean {
+    if (target.comboCorrection.standGauge < DEFAULT_COMBO_CORRECTION_CONFIG.barMax) return false;
+    if (target.reactionState !== "none" && target.reactionState !== "micro_stagger" && target.reactionState !== "light_stagger" && target.reactionState !== "heavy_stagger") return false;
+    if (decision.hitbox.canGrab || decision.hitbox.hitType === "grab") return false;
+    if (decision.armorDecision?.controlBlocked) return false;
+    return true;
+  }
+
+  private applyForcedWakeIfQueued(target: Actor, correlationId: string): void {
+    if (!target.comboCorrection.forcedWakeQueued || target.flags.dead) return;
+    target.comboCorrection.forcedWakeQueued = false;
+    target.reactionState = "getting_up";
+    target.handfeel.downRemaining = 0;
+    target.handfeel.reactionRemaining = 0;
+    target.handfeel.getUpRemaining = Math.max(target.handfeel.getUpRemaining, DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames);
+    target.velocity.x = 0;
+    target.velocity.z = 0;
+    target.velocity.y = 0;
+    target.position.y = 0;
+    target.armorProfile.temporaryFlags.getUpArmorUntilTick = this.tickCount + DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames;
+    target.armorProfile.temporaryFlags.invulnerableUntilTick = this.tickCount + DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames;
+    this.bus.emit("ComboForcedWake", CombatEventPriority.Reaction, this.tickCount, {
+      targetId: target.id,
+      invulnerableUntilTick: target.armorProfile.temporaryFlags.invulnerableUntilTick,
+      state: { ...target.comboCorrection },
+    }, {targetActorId:target.id, correlationId});
   }
 
   private shouldStartBloodlustGrab(attacker: Actor, decision: HitDecision): boolean {
@@ -571,6 +652,7 @@ export class CombatKernel {
     const targetWasBleeding = target.statusEffects.some(s => s.type === "bleed");
     const req=this.damageResolver.requestFromHit(decision,correlationId,"Bloodlust");
     this.bus.emit("HitConfirmed", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId});
+    this.updateComboCorrection(target, decision, correlationId);
     this.bus.emit("DamageRequested", CombatEventPriority.Damage, this.tickCount, req, {sourceActorId:attacker.id,targetActorId:target.id, correlationId});
     const damage=this.damageResolver.apply(target, req, {isCounter:decision.isCounter,isBackAttack:decision.isBackAttack,isCritical:decision.isCritical}, decision.armorDecision?.damageAllowed ?? true, this.damageMultipliersFor(attacker, target, req.actionName));
     this.lastHit.updateFromDamage(this.tickCount,damage);
@@ -580,6 +662,7 @@ export class CombatKernel {
     this.bus.emit("ReactionRequested", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId});
     this.reactionResolver.apply(target,finalReaction,decision,attacker,this.tickCount);
     this.bus.emit("ReactionApplied", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId});
+    this.applyForcedWakeIfQueued(target, correlationId);
     const action=getAction("Bloodlust");
     this.hitStop.start([attacker.id], action.hitStopProfile.frames);
     this.hitStop.start([target.id], action.hitStopProfile.frames);
@@ -616,19 +699,48 @@ export class CombatKernel {
     }
   }
 
+  private applyVimAndVigorBleed(attacker: Actor, target: Actor, actionName?: ActionName): void {
+    if (!actionName || !attacker.buffs.some(b=>b.type==="vim_and_vigor")) return;
+    if (!this.isVimAndVigorBleedAction(actionName)) return;
+    this.status.applyBleed(target, attacker.id, actionName, this.tickCount, this.bus, 1, { durationFrames:420, dotDamagePerStack:14 });
+  }
+
   private damageMultipliersFor(attacker: Actor, target: Actor, actionName?: ActionName): Array<{name:string; value:number}> {
     const multipliers: Array<{name:string; value:number}> = [];
     if (actionName && this.isFrenzySkillAttackAction(actionName)) {
       const value = attacker.buffs.find(b=>b.type==="frenzy")?.modifiers.find(modifier => modifier.key === "berserker_skill_attack")?.value;
       if (value && value !== 1) multipliers.push({name:"frenzy_skill_attack", value});
+      const derangeValue = attacker.buffs.find(b=>b.type==="derange")?.modifiers.find(modifier => modifier.key === "derange_skill_attack")?.value;
+      if (derangeValue && derangeValue !== 1) multipliers.push({name:"derange_skill_attack", value:derangeValue});
+      const bloodyCrossValue = attacker.buffs.find(b=>b.type==="bloody_cross")?.modifiers.find(modifier => modifier.key === "bloody_cross_skill_attack")?.value;
+      if (bloodyCrossValue && bloodyCrossValue !== 1) multipliers.push({name:"bloody_cross_skill_attack", value:bloodyCrossValue});
+      const thirstValue = attacker.buffs.find(b=>b.type==="thirst")?.modifiers.find(modifier => modifier.key === "thirst_skill_attack_percent")?.value;
+      if (thirstValue && thirstValue !== 0) multipliers.push({name:"thirst_skill_attack", value: 1 + thirstValue / 100});
     }
+    // ratio_7: blood_memory strength → atk_reinforce (applies to all attacks, not just frenzy-skill)
+    const bmStrength = attacker.buffs.find(b=>b.type==="blood_memory")?.modifiers.find(modifier => modifier.key === "blood_memory_strength_percent")?.value;
+    if (bmStrength && bmStrength !== 0) multipliers.push({name:"ratio_7_atk_reinforce", value: 1 + bmStrength / 100});
+    // ratio_9: blood_memory incoming damage reduction (applies defensively, wired as target-side multiplier)
+    const bmDef = attacker.buffs.find(b=>b.type==="blood_memory")?.modifiers.find(modifier => modifier.key === "blood_memory_incoming_damage_reduction_percent")?.value;
+    if (bmDef && bmDef !== 0) multipliers.push({name:"ratio_9_misc", value: 1 + bmDef / 100});
     const ruptureStacks = target.statusEffects.filter(status => status.type === "rupture").reduce((sum, status) => sum + status.stacks, 0);
     if (ruptureStacks > 0) multipliers.push({name:"rupture_incoming_damage", value:1 + ruptureStacks * 0.1});
+    if (this.isPveComboProtectedTarget(target) && target.comboCorrection.damageScale < 1) {
+      multipliers.push({name:"combo_damage_scale", value:target.comboCorrection.damageScale});
+    }
     return multipliers;
   }
 
+  private isPveComboProtectedTarget(target: Actor): boolean {
+    return target.type === "boss" || target.armorProfile.baseType === "boss_super_armor" || target.armorProfile.baseType === "super_armor";
+  }
+
   private isFrenzySkillAttackAction(actionName: ActionName): boolean {
-    return actionName === "FrenzyBasic1" || actionName === "FrenzyBasic2" || actionName === "FrenzyBasic3" || actionName === "DashAttack" || actionName === "JumpAttack" || actionName === "RagingFury" || actionName === "Bloodlust";
+    return actionName === "FrenzyBasic1" || actionName === "FrenzyBasic2" || actionName === "FrenzyBasic3" || actionName === "DashAttack" || actionName === "JumpAttack" || actionName === "RagingFury" || actionName === "Bloodlust" || actionName === "GoreCross" || actionName === "OutrageBreak" || actionName === "ExtremeOverkill" || actionName === "RagingFury2" || actionName === "BloodRuin" || actionName === "BloodSword" || actionName === "BurstFury" || actionName === "EarthShatter" || actionName === "UpwardSlash" || actionName === "MountainousWheel";
+  }
+
+  private isVimAndVigorBleedAction(actionName: ActionName): boolean {
+    return actionName === "MountainousWheel" || actionName === "RagingFury" || actionName === "Bloodlust" || actionName === "GoreCross" || actionName === "RagingFury2" || actionName === "BurstFury";
   }
 
   private updateScenarioFlags(decision:HitDecision, finalReaction:string, damage:{sourceKind:string; reactionPolicy:string; finalDamage:number}): void {
@@ -653,7 +765,7 @@ export class CombatKernel {
         a.position.y += a.velocity.y;
         a.velocity.x *= friction;
         a.velocity.z *= friction;
-        a.velocity.y -= 0.56;
+        a.velocity.y -= 0.56 * a.comboCorrection.gravityScale;
         if((a.reactionState==="launch" || a.reactionState==="air_hitstun") && a.velocity.y < 0) a.reactionState="falling";
         if(a.position.y<=0){
           a.position.y=0;

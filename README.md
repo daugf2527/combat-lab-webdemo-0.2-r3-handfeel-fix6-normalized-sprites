@@ -8,6 +8,24 @@
 
 正式仓库名 / Pages 路径标准：`carbon-shade-web`。
 
+## DNF Reference Truth Standard
+
+When implementing or reviewing DNF/DFO-aligned combat behavior, **Neople official API verification is the first golden standard** for any field it exposes. DFO-specific wiki references such as DFO World are the second golden standard for fields that official API/pages do not expose, after checking freshness and conflicts.
+
+Priority order:
+
+1. Neople official Open API and official Nexon/Neople update/guide pages.
+2. Locally archived official-API snapshots with provenance, API path, captured date, and source version.
+3. DFO-specific wiki/reference pages such as DFO World for skill semantics, public level tables, command notes, and general mechanic descriptions not exposed by official sources.
+4. General encyclopedias such as Wikipedia only for background context, release/server history, terminology, publisher/developer identity, and broad chronology. Do not use Wikipedia for combat numbers, frame data, hitboxes, damage formulas, skill scaling, AI behavior, or live balance values.
+5. Clean-room local baseline tuning in `docs/design/tuning-baseline.md`.
+
+Important boundary: the official API can validate skill IDs, job trees, descriptions, level tables, cooldowns, MP costs, option values, hit-count fields, and official text. It does **not** by itself provide full client frame truth such as startup/active/recovery frames, hitbox/hurtbox geometry, launch/gravity curves, combo-protection thresholds, server authority logic, or network sync protocol. Those must be marked as calibrated baseline unless backed by another official source.
+
+Wiki data must be cited with page URL, accessed date, and conflict status. If it conflicts with official API or official pages, official sources win.
+
+Never commit API keys. Use `NEOPLE_API_KEY` only from local environment variables or a backend proxy.
+
 ## Project direction
 
 《碳影》是一款关于借力、成长、代价与归途的 2.5D 战斗养成寓言。
@@ -64,7 +82,7 @@ Implemented R3 acceptance points:
 - Status DOT damage uses `sourceKind=status_dot` and `reactionPolicy=status_tick_feedback_only` and does not trigger normal hit reaction, HitStop, or Recoil.
 - DeathLoop opens and closes a cleanup barrier and blocks later actions from dead actors.
 - BuildingArmor allows damage while blocking launch, knockdown, knockback, and grab.
-- RagingFury uses shockwave plus eight blood-pillar hit groups.
+- RagingFury uses shockwave plus ten blood-pillar hit groups, matching the official API-exposed hit count.
 - Static tests are behavior assertions under `tests/static/`, not token-grep scans.
 - Deterministic kernel tests cover required scenario booleans without depending on a headless browser.
 
