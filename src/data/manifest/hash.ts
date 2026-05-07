@@ -2,6 +2,7 @@
 // that replaces hardcoded "combat-schema-v1" in ReplayRecorder.
 
 import type { FrameDataAction, ActionName, StatusManifest } from "../../combat/types.js";
+import type { EnemyManifest } from "./aiTypes.js";
 
 /**
  * Deterministic stringify — sorts object keys for stable output.
@@ -38,5 +39,10 @@ export function computeActionsHash(actions: Record<ActionName, FrameDataAction>)
 
 export function computeStatusManifestHash(manifest: StatusManifest): string {
   const jsonCompatible = JSON.parse(JSON.stringify(manifest)) as StatusManifest;
+  return fnv1a(stableStringify(jsonCompatible));
+}
+
+export function computeEnemyManifestHash(manifest: EnemyManifest): string {
+  const jsonCompatible = JSON.parse(JSON.stringify(manifest)) as EnemyManifest;
   return fnv1a(stableStringify(jsonCompatible));
 }

@@ -1,1 +1,7 @@
-export const enemyProfiles = { grunt:{armor:"none", hp:160}, boss:{armor:"boss_super_armor", hp:420}, building:{armor:"building_armor", hp:500} } as const;
+import { ENEMY_PROFILES } from "../manifest/ai.js";
+
+export const enemyProfiles = {
+  grunt: { armor: ENEMY_PROFILES.grunt.armor, hp: ENEMY_PROFILES.grunt.hp },
+  boss: { armor: ENEMY_PROFILES.boss.armor, hp: ENEMY_PROFILES.boss.hp },
+  building: { armor: ENEMY_PROFILES.building.armor, hp: ENEMY_PROFILES.building.hp },
+} as const;

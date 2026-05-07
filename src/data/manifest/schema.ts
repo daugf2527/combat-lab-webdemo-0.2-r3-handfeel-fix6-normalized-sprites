@@ -2,6 +2,7 @@
 // at load time, catching structural errors before they hit runtime.
 
 import type { ActionName, FrameDataAction, FrameDataProvenanceField, Provenance, StatusEffectType, StatusManifest, StatusProfile, StatusProvenanceField } from "../../combat/types.js";
+import type { EnemyManifest, EnemyManifestField, EnemyManifestId, EnemyRuntimeProfile } from "./aiTypes.js";
 
 export const SOURCE_POLICY_VERSION = "source-policy-v1";
 
@@ -26,6 +27,18 @@ const requiredRuntimeFields: FrameDataProvenanceField[] = [
 ];
 const implementedRuntimeStatusTypes = new Set<StatusEffectType>(["bleed", "poison", "burn", "shock", "rupture"]);
 const requiredStatusFields: StatusProvenanceField[] = ["durationFrames", "maxStacks", "dispelPolicy"];
+const implementedRuntimeEnemyIds = new Set<EnemyManifestId>(["grunt", "dummy", "imp", "boss", "building"]);
+const requiredEnemyFields: EnemyManifestField[] = [
+  "detectRange",
+  "attackRange",
+  "preAttackFrames",
+  "postCooldown",
+  "moveSpeedPerTick",
+  "loseAggroRange",
+  "hp",
+  "damage",
+  "armor",
+];
 
 export interface ManifestValidationOptions {
   profile?: "runtime" | "archive";
@@ -239,6 +252,69 @@ export function validateStatusManifest(
   for (const type of implementedRuntimeStatusTypes) {
     if (!manifest.profiles[type]) {
       violations.push({ path: `profiles.${type}`, message: "implemented status is missing from runtime manifest" });
+    }
+  }
+
+  return violations;
+}
+
+export function validateEnemyProfile(
+  id: EnemyManifestId,
+  profile: EnemyRuntimeProfile,
+  options: ManifestValidationOptions = {}
+): SchemaViolation[] {
+  const violations: SchemaViolation[] = [];
+  const runtimeProfile = options.profile ?? "runtime";
+  const p = (field: string) => `profiles.${id}.${field}`;
+
+  if (profile.id !== id) {
+    violations.push({ path: p("id"), message: `profile id "${profile.id}" does not match key "${id}"` });
+  }
+  for (const field of ["detectRange", "attackRange", "preAttackFrames", "postCooldown", "moveSpeedPerTick", "loseAggroRange", "hp", "damage"] as const) {
+    const value = profile[field];
+    if (typeof value !== "number" || value < 0) {
+      violations.push({ path: p(field), message: `${field} must be a non-negative number, got ${value}` });
+    }
+  }
+  if (!["none", "super_armor", "boss_super_armor", "building_armor"].includes(profile.armor)) {
+    violations.push({ path: p("armor"), message: `unknown armor "${String(profile.armor)}"` });
+  }
+
+  for (const field of requiredEnemyFields) {
+    const provenance = profile.fieldProvenance?.[field];
+    if (!provenance) {
+      violations.push({ path: p(`fieldProvenance.${field}`), message: "missing field-level provenance" });
+      continue;
+    }
+    violations.push(...validateProvenance(p(`fieldProvenance.${field}`), provenance, runtimeProfile));
+  }
+
+  return violations;
+}
+
+export function validateEnemyManifest(
+  manifest: EnemyManifest,
+  options: ManifestValidationOptions = {}
+): SchemaViolation[] {
+  const violations: SchemaViolation[] = [];
+  if (manifest.manifestVersion !== "enemy-manifest-v1") {
+    violations.push({ path: "manifestVersion", message: `expected enemy-manifest-v1, got ${String(manifest.manifestVersion)}` });
+  }
+  if (manifest.sourcePolicyVersion !== SOURCE_POLICY_VERSION) {
+    violations.push({ path: "sourcePolicyVersion", message: `expected ${SOURCE_POLICY_VERSION}, got ${String(manifest.sourcePolicyVersion)}` });
+  }
+
+  for (const [id, profile] of Object.entries(manifest.profiles) as [EnemyManifestId, EnemyRuntimeProfile][]) {
+    if (!implementedRuntimeEnemyIds.has(id)) {
+      violations.push({ path: `profiles.${id}`, message: "enemy id is not implemented in the runtime profile" });
+      continue;
+    }
+    violations.push(...validateEnemyProfile(id, profile, options));
+  }
+
+  for (const id of implementedRuntimeEnemyIds) {
+    if (!manifest.profiles[id]) {
+      violations.push({ path: `profiles.${id}`, message: "implemented enemy is missing from runtime manifest" });
     }
   }
 
