@@ -2,8 +2,10 @@
 // providing a single source of truth for runtime data.
 
 import type { FrameDataAction, ActionName, StatusManifest } from "../../combat/types.js";
-import { validateManifest, validateStatusManifest, type ManifestValidationOptions } from "./schema.js";
+import { validateEnemyManifest, validateManifest, validateStatusManifest, type ManifestValidationOptions } from "./schema.js";
 import { computeActionsHash } from "./hash.js";
+import { DEFAULT_ENEMY_MANIFEST } from "./ai.js";
+import type { EnemyManifest } from "./aiTypes.js";
 import { DEFAULT_STATUS_MANIFEST } from "./status.js";
 
 // Dynamic import for JSON — in Node tests this works with assert { type: "json" },
@@ -13,6 +15,7 @@ import { DEFAULT_STATUS_MANIFEST } from "./status.js";
 let _cachedActions: Record<ActionName, FrameDataAction> | null = null;
 let _cachedHash: string | null = null;
 let _cachedStatusManifest: StatusManifest | null = null;
+let _cachedEnemyManifest: EnemyManifest | null = null;
 
 /**
  * Loads the actions manifest from JSON.
@@ -99,5 +102,23 @@ function assertValidStatusManifest(manifest: StatusManifest, options: ManifestVa
   if (violations.length > 0) {
     const msg = violations.map(v => `${v.path}: ${v.message}`).join("\n  ");
     throw new Error(`Status manifest validation failed with ${violations.length} violation(s):\n  ${msg}`);
+  }
+}
+
+export async function loadEnemyManifest(options: ManifestValidationOptions = {}): Promise<EnemyManifest> {
+  if (_cachedEnemyManifest) {
+    assertValidEnemyManifest(_cachedEnemyManifest, options);
+    return _cachedEnemyManifest;
+  }
+  assertValidEnemyManifest(DEFAULT_ENEMY_MANIFEST, options);
+  _cachedEnemyManifest = DEFAULT_ENEMY_MANIFEST;
+  return _cachedEnemyManifest;
+}
+
+function assertValidEnemyManifest(manifest: EnemyManifest, options: ManifestValidationOptions): void {
+  const violations = validateEnemyManifest(manifest, options);
+  if (violations.length > 0) {
+    const msg = violations.map(v => `${v.path}: ${v.message}`).join("\n  ");
+    throw new Error(`Enemy manifest validation failed with ${violations.length} violation(s):\n  ${msg}`);
   }
 }

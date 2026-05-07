@@ -2,10 +2,13 @@ import { assert } from "./test-utils.js";
 import type { ActionName, FrameDataAction } from "../../src/combat/types.js";
 import { ACTIONS, getAction } from "../../src/combat/actions/FrameDataAction.js";
 import { ReplayRecorder } from "../../src/combat/replay/ReplayRecorder.js";
-import { computeActionsHash, computeStatusManifestHash } from "../../src/data/manifest/hash.js";
-import { loadActionsManifest, loadStatusManifest } from "../../src/data/manifest/loader.js";
+import { cloneEnemyTuning, enemyTuning } from "../../src/data/ai/enemyTuning.js";
+import { computeActionsHash, computeEnemyManifestHash, computeStatusManifestHash } from "../../src/data/manifest/hash.js";
+import { loadActionsManifest, loadEnemyManifest, loadStatusManifest } from "../../src/data/manifest/loader.js";
+import { DEFAULT_ENEMY_MANIFEST } from "../../src/data/manifest/ai.js";
 import { DEFAULT_STATUS_MANIFEST } from "../../src/data/manifest/status.js";
-import { SOURCE_POLICY_VERSION, validateManifest, validateStatusManifest } from "../../src/data/manifest/schema.js";
+import { SOURCE_POLICY_VERSION, validateEnemyManifest, validateManifest, validateStatusManifest } from "../../src/data/manifest/schema.js";
+import type { EnemyManifest, EnemyManifestId } from "../../src/data/manifest/aiTypes.js";
 
 function cloneActions(): Record<ActionName, FrameDataAction> {
   return JSON.parse(JSON.stringify(ACTIONS)) as Record<ActionName, FrameDataAction>;
@@ -89,12 +92,15 @@ function cloneActions(): Record<ActionName, FrameDataAction> {
 
   const recorder = new ReplayRecorder();
   const statusManifestHash = computeStatusManifestHash(DEFAULT_STATUS_MANIFEST);
+  const enemyManifestHash = computeEnemyManifestHash(DEFAULT_ENEMY_MANIFEST);
   assert.equal(recorder.metadata.combatSchemaHash, manifestHash);
   assert.equal(recorder.metadata.manifestHash, manifestHash);
   assert.equal(recorder.metadata.statusManifestHash, statusManifestHash);
+  assert.equal(recorder.metadata.enemyManifestHash, enemyManifestHash);
   assert.equal(recorder.metadata.sourcePolicyVersion, SOURCE_POLICY_VERSION);
   assert.equal(recorder.metadata.dataSources.actions, "src/combat/actions/FrameDataAction.ts#ACTIONS");
   assert.equal(recorder.metadata.dataSources.status, "src/data/manifest/status/default.json#profiles");
+  assert.equal(recorder.metadata.dataSources.ai, "src/data/manifest/ai/enemy-default.json#profiles");
   assert.equal(recorder.metadata.dataSources.damage, "local_baseline");
 }
 
@@ -120,6 +126,74 @@ function cloneActions(): Record<ActionName, FrameDataAction> {
     computeStatusManifestHash(statusManifest),
     "status manifest hash should change when status data changes"
   );
+}
+
+function profileToTuning(profile: EnemyManifest["profiles"]["grunt"]) {
+  return {
+    phase: "idle",
+    phaseEnteredTick: 0,
+    windupRemaining: 0,
+    recoverRemaining: 0,
+    detectRange: profile.detectRange,
+    attackRange: profile.attackRange,
+    preAttackFrames: profile.preAttackFrames,
+    postCooldown: profile.postCooldown,
+    moveSpeedPerTick: profile.moveSpeedPerTick,
+    loseAggroRange: profile.loseAggroRange,
+    hp: profile.hp,
+    damage: profile.damage,
+    armor: profile.armor,
+  };
+}
+
+{
+  const enemyManifest = await loadEnemyManifest();
+  const enemyIds: EnemyManifestId[] = ["grunt", "dummy", "imp", "boss", "building"];
+  assert.deepEqual(validateEnemyManifest(enemyManifest), [], "enemy manifest should satisfy runtime provenance gates");
+  assert.deepEqual(
+    Object.keys(enemyManifest.profiles).sort(),
+    ["boss", "building", "dummy", "grunt", "imp"],
+    "runtime enemy manifest should only include current enemy tuning profiles"
+  );
+  for (const id of enemyIds) {
+    assert.deepEqual(profileToTuning(enemyManifest.profiles[id]), enemyTuning[id], `${id} enemy manifest should match enemyTuning`);
+    assert.deepEqual(cloneEnemyTuning(id), enemyTuning[id], `${id} cloneEnemyTuning should keep existing behavior`);
+    assert.equal(enemyManifest.profiles[id].fieldProvenance.hp?.sourceType, "local_baseline");
+    assert.equal(enemyManifest.profiles[id].fieldProvenance.detectRange?.sourceType, "local_baseline");
+  }
+
+  const changed = JSON.parse(JSON.stringify(enemyManifest)) as EnemyManifest;
+  changed.profiles.grunt.detectRange += 1;
+  assert.notEqual(
+    computeEnemyManifestHash(changed),
+    computeEnemyManifestHash(enemyManifest),
+    "enemy manifest hash should change when enemy AI data changes"
+  );
+}
+
+{
+  const enemyManifest = await loadEnemyManifest();
+  const missing = JSON.parse(JSON.stringify(enemyManifest)) as EnemyManifest;
+  delete missing.profiles.grunt.fieldProvenance.detectRange;
+  const violations = validateEnemyManifest(missing);
+  assert.ok(
+    violations.some(v => v.path === "profiles.grunt.fieldProvenance.detectRange"),
+    "enemy AI range without field provenance should fail validation"
+  );
+}
+
+{
+  for (const sourceType of ["needs_calibration", "experimental"] as const) {
+    const enemyManifest = await loadEnemyManifest();
+    const blocked = JSON.parse(JSON.stringify(enemyManifest)) as EnemyManifest;
+    blocked.profiles.boss.fieldProvenance.attackRange!.sourceType = sourceType;
+    blocked.profiles.boss.fieldProvenance.attackRange!.requiresCalibration = true;
+    const violations = validateEnemyManifest(blocked);
+    assert.ok(
+      violations.some(v => v.path === "profiles.boss.fieldProvenance.attackRange"),
+      `${sourceType} enemy AI behavior must not enter the default runtime profile`
+    );
+  }
 }
 
 {
