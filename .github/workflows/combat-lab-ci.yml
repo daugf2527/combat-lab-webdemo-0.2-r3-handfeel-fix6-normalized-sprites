@@ -98,7 +98,7 @@ jobs:
           echo "OK: Build hash properly injected"
 
       - name: Upload CI evidence artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ci-evidence-${{ github.run_number }}-${{ github.run_attempt }}
@@ -109,7 +109,7 @@ jobs:
           retention-days: 7
 
       - name: Upload failed build debug bundle
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: failed-build-debug-${{ github.run_number }}-${{ github.run_attempt }}
@@ -124,13 +124,13 @@ jobs:
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
@@ -164,7 +164,7 @@ jobs:
         run: node scripts/assert-runtime-evidence.mjs verification/runtime-evidence.json verification/browser-smoke.json
 
       - name: Upload browser smoke evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: browser-smoke-evidence-${{ github.run_number }}-${{ github.run_attempt }}
@@ -175,7 +175,7 @@ jobs:
           retention-days: 7
 
       - name: Upload browser smoke failure report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: browser-smoke-failure-${{ github.run_number }}-${{ github.run_attempt }}
@@ -198,7 +198,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
 
   verify-windows:
     name: Verify (Windows, experimental)
