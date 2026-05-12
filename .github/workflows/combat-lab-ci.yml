@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: combat-lab-ci-${{ github.ref }}-${{ matrix.node-version }}
+  group: combat-lab-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
