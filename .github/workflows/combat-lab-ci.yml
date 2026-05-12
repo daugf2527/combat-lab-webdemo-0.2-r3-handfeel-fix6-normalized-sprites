@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: combat-lab-ci-${{ github.ref }}
+  group: combat-lab-ci-${{ github.ref }}-${{ matrix.node-version }}
   cancel-in-progress: true
 
 jobs:
@@ -97,16 +97,30 @@ jobs:
           fi
           echo "OK: Build hash properly injected"
 
-      - name: Upload build and verification artifacts
+      - name: Upload CI evidence artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: combat-lab-ci-artifacts-${{ github.run_number }}
+          name: ci-evidence-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            .tmp/*.json
+            verification/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload failed build debug bundle
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: failed-build-debug-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             dist/
-            .tmp/static-test-results.json
+            .tmp/
+            verification/
+            test-results/
+            playwright-report/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
@@ -149,18 +163,27 @@ jobs:
       - name: Assert runtime evidence
         run: node scripts/assert-runtime-evidence.mjs verification/runtime-evidence.json verification/browser-smoke.json
 
-      - name: Upload smoke test artifacts
+      - name: Upload browser smoke evidence
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: browser-smoke-artifacts-${{ github.run_number }}
+          name: browser-smoke-evidence-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             verification/*.json
             verification/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload browser smoke failure report
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-smoke-failure-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
             test-results/
             playwright-report/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3
 
   deploy-pages:
     name: Deploy GitHub Pages
