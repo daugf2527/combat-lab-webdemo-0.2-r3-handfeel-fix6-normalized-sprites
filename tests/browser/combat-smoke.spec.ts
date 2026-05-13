@@ -340,8 +340,15 @@ test("combat scene boots, runs deterministic scenario, and validates all combat 
   await expect(page.locator("canvas")).toBeVisible();
   results.push({ check: "canvas_present", passed: true });
 
+  // Phaser BootScene: press Enter or click "Start Training Ground" button
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel));
+  try {
+    await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { timeout: 15000 });
+  } catch {
+    // Retry: click the start button directly
+    await page.locator("text=Start Training Ground").first().click({ timeout: 5000 }).catch(() => undefined);
+    await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { timeout: 15000 });
+  }
   results.push({ check: "combat_scene_ready", passed: true });
 
   // Screenshot pre-scenario
