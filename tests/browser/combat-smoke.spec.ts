@@ -347,17 +347,23 @@ test("combat scene boots, runs deterministic scenario, and validates all combat 
 
   // Phaser BootScene: press Enter or click "Start Training Ground" button
   await page.keyboard.press("Enter");
+  let booted = false;
   try {
     await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { polling: 200, timeout: 25000 });
+    booted = true;
   } catch {
     // Retry: click the start button directly
     const btn = page.locator("text=Start Training Ground").first();
     if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await btn.click().catch(() => undefined);
     }
-    await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { polling: 200, timeout: 25000 });
+    try {
+      await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { polling: 200, timeout: 25000 });
+      booted = true;
+    } catch {
+      booted = false;
+    }
   }
-  const booted = await page.evaluate(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel));
   results.push({ check: "combat_scene_ready", passed: booted, bootErrors });
   if (!booted) {
     // Dump page state for debugging
