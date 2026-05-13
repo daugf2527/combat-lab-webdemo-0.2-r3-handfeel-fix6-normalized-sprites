@@ -43,6 +43,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
       - name: Set build hash from git commit
         run: echo "BUILD_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
@@ -112,7 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: failed-build-debug-${{ github.run_number }}-${{ github.run_attempt }}
+          name: failed-build-debug-node-${{ matrix.node-version }}-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             dist/
             .tmp/
