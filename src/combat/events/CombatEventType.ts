@@ -9,6 +9,6 @@ export type CombatEventType =
   | "BuffApplyRequested" | "BuffApplied" | "BuffRefreshed" | "BuffStacked" | "BuffReplaced" | "BuffTicked" | "BuffExpired" | "BuffDispelled" | "BuffDeathCleanup"
   | "StatusApplyRequested" | "StatusApplied" | "StatusTickRequested" | "StatusTicked" | "StatusSplashTicked" | "StatusExpired" | "StatusResisted" | "StatusDispelled" | "StatusDeathCleanup"
   | "ActorDied" | "DeathCleanupCompleted" | "ActorRespawned"
-  | "SoundRequested" | "CameraShakeRequested" | "DamageNumberRequested" | "VfxRequested"
+  | "SoundRequested" | "CameraShakeRequested" | "CameraFlashRequested" | "DamageNumberRequested" | "VfxRequested"
   | "DebugActionRequested" | "DebugActionApplied"
   | "LastHitTraceUpdated" | "ReplayFrameRecorded" | "DebugOverlayUpdated";

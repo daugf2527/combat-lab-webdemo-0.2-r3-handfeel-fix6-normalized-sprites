@@ -2,6 +2,7 @@ import type { Actor, ActionName, ScenarioBooleans, HitDecision, Facing, Handfeel
 import { createActor } from "../actors/ActorFactory.js";
 import { getAction } from "../actions/FrameDataAction.js";
 import { BrowserInputState, CommandInputParser, InputBuffer, type BufferedInput } from "../input/BrowserInputState.js";
+import { SOCDCleaner } from "../input/SOCDCleaner.js";
 import { RunCommandDetector } from "../input/RunCommandDetector.js";
 import { CombatEventBus, CombatEventPriority } from "../events/CombatEventBus.js";
 import { nextId, resetIds } from "../util/ids.js";
@@ -26,6 +27,8 @@ import { ReplayRecorder } from "../replay/ReplayRecorder.js";
 import { EnemyAIController } from "../ai/EnemyAI.js";
 import { BOSS_CONFIGS } from "../../data/manifest/ai.js";
 import { DEFAULT_COMBO_CORRECTION_CONFIG, applyComboCorrectionFromHit, hasComboCorrectionPressure, resetComboCorrectionState } from "../combo/ComboCorrection.js";
+import type { CombatSystem, SystemPhase } from "./CombatSystem.js";
+import type { SystemContext } from "./SystemContext.js";
 
 export interface CombatKernelOptions { enableReplay?: boolean; }
 
@@ -65,11 +68,17 @@ export class CombatKernel {
   readonly lastHit = new LastHitTrace();
   readonly debug = new DebugOverlay();
   readonly runDetector = new RunCommandDetector();
+  readonly socd = new SOCDCleaner();
   readonly enemyAI = new EnemyAIController(BOSS_CONFIGS);
   readonly replay = new ReplayRecorder();
   readonly bloodlustGrabHolds = new Map<string, BloodlustGrabHold>();
   readonly bloodlustWhiffEruptions = new Set<string>();
   readonly worldBounds = { xMin: 96, xMax: 2730, zMin: -180, zMax: 180 };
+
+  /** Ordered pipeline of combat subsystems executed each tick.
+   *  Each stage is a named system with a phase. The kernel iterates
+   *  this array in order, calling each system's tick() method. */
+  readonly pipeline: CombatSystem[] = [];
   scenario: ScenarioBooleans = {
     normalHitObserved:false,
     launchObserved:false,
@@ -87,6 +96,7 @@ export class CombatKernel {
       const target = event.targetActorId ?? (event.payload as {actorId?:string}).actorId;
       return target ? this.death.blocks(target, event.type) : null;
     };
+    this.buildPipeline();
   }
 
   get player(): Actor {
@@ -111,6 +121,7 @@ export class CombatKernel {
     this.inputBuffer.clearAll();
     this.inputState.clearAll();
     this.runDetector.reset();
+    this.socd.reset();
     this.hitStop.clear();
     this.recoil.clear();
     this.death.clear();
@@ -123,51 +134,78 @@ export class CombatKernel {
   onLargeDelta(deltaMs:number): void { this.notes.push(`large-delta:${deltaMs}`); }
   emitLongFrameWarning(deltaMs:number): void { this.notes.push(`long-frame:${deltaMs}`); }
 
+  /** Build the ordered pipeline of combat subsystems executed each tick.
+   *  Systems are grouped by phase and executed in fixed order for determinism.
+   *  Each stage wraps a logical group of the original monolithic tick(). */
+  private buildPipeline(): void {
+    this.pipeline.length = 0;
+    const self = this;
+
+    // ── INPUT phase ──
+    this.pipeline.push({ name: "ReactionTick", phase: "INPUT", tick: () => {
+      const endedHitStop = self.hitStop.tick();
+      for (const id of endedHitStop) self.bus.emit("HitStopEnded", CombatEventPriority.Reaction, self.tickCount, {actorId:id}, {targetActorId:id});
+      const endedRecoil = self.recoil.tick(id => self.hitStop.isFrozen(id));
+      for (const id of endedRecoil) self.bus.emit("RecoilEnded", CombatEventPriority.Reaction, self.tickCount, {actorId:id}, {targetActorId:id});
+    }});
+    this.pipeline.push({ name: "CollectInput", phase: "INPUT", tick: () => self.collectInput() });
+    this.pipeline.push({ name: "ConsumeInput", phase: "INPUT", tick: () => self.consumeInput() });
+    this.pipeline.push({ name: "LocomotionInput", phase: "INPUT", tick: () => self.applyLocomotionFromHeldInput() });
+    this.pipeline.push({ name: "EnemyAI", phase: "INPUT", tick: () => self.tickEnemyAI() });
+
+    // ── LOGIC phase ──
+    this.pipeline.push({ name: "UpdateActions", phase: "LOGIC", tick: () => self.updateActions() });
+    this.pipeline.push({ name: "RootMotion", phase: "LOGIC", tick: () => self.applyRootMotion() });
+    this.pipeline.push({ name: "BloodlustGrab", phase: "LOGIC", tick: () => self.updateBloodlustGrabHolds() });
+    this.pipeline.push({ name: "BloodlustEruption", phase: "LOGIC", tick: () => self.updateBloodlustWhiffEruptions() });
+
+    // ── DETECTION phase ──
+    this.pipeline.push({ name: "PushBoxResolve", phase: "DETECTION", tick: () => self.push.resolve(self.actors) });
+    this.pipeline.push({ name: "ClampBounds", phase: "DETECTION", tick: () => { for (const a of self.actors) self.clampToBounds(a); }});
+    this.pipeline.push({ name: "ResolveHits", phase: "DETECTION", tick: () => self.resolveHitQueries() });
+    this.pipeline.push({ name: "ReactionMotion", phase: "DETECTION", tick: () => self.updateReactionMotion() });
+
+    // ── RESOLVE phase (per-actor) ──
+    this.pipeline.push({ name: "PerActorTick", phase: "RESOLVE", tick: () => {
+      for (const a of self.actors) {
+        self.tickComboCorrection(a);
+        if (a.handfeel.hitFlashRemaining && a.handfeel.hitFlashRemaining > 0) a.handfeel.hitFlashRemaining -= 1;
+        if (a.handfeel.visualRecoilRemaining && a.handfeel.visualRecoilRemaining > 0) a.handfeel.visualRecoilRemaining -= 1;
+        if (self.status.tick(a, self.tickCount, self.bus, self.hitStop.isFrozen(a.id), self.actors)) self.scenario.bleedObserved = true;
+        self.buffs.tick(a, self.tickCount, self.bus, self.hitStop.isFrozen(a.id));
+        self.cooldowns.tick(a, self.tickCount, self.bus, self.hitStop.isFrozen(a.id));
+        if(a.resources.hp<=0) self.death.kill(a,self.tickCount,self.bus);
+      }
+    }});
+
+    // ── RECORD / FLUSH phase ──
+    this.pipeline.push({ name: "TickEndEmit", phase: "RECORD", tick: () => {
+      self.bus.emit("TickEnded", CombatEventPriority.Debug, self.tickCount, {tick:self.tickCount});
+    }});
+    this.pipeline.push({ name: "EventFlush", phase: "FLUSH", tick: () => self.bus.flush() });
+    this.pipeline.push({ name: "ReplayRecord", phase: "RECORD", tick: () => {
+      if (self.options.enableReplay !== false) {
+        const flushedEvents = self.bus.archive.slice(self._replayArchiveStart);
+        self.replay.record(self.tickCount, self.actors, flushedEvents, self.inputState.snapshot(self.tickCount));
+      }
+    }});
+    this.pipeline.push({ name: "InputEndTick", phase: "FLUSH", tick: () => self.inputState.endTick() });
+  }
+
+  private _replayArchiveStart = 0;
+
   tick(): void {
-    const replayArchiveStart = this.bus.archive.length;
+    this._replayArchiveStart = this.bus.archive.length;
     this.tickCount += 1;
     this.bus.emit("TickStarted", CombatEventPriority.Debug, this.tickCount, {tick:this.tickCount});
-
-    const endedHitStop = this.hitStop.tick();
-    for (const id of endedHitStop) this.bus.emit("HitStopEnded", CombatEventPriority.Reaction, this.tickCount, {actorId:id}, {targetActorId:id});
-
-    const endedRecoil = this.recoil.tick(id => this.hitStop.isFrozen(id));
-    for (const id of endedRecoil) this.bus.emit("RecoilEnded", CombatEventPriority.Reaction, this.tickCount, {actorId:id}, {targetActorId:id});
-
-    this.collectInput();
-    this.consumeInput();
-    this.applyLocomotionFromHeldInput();
-    this.tickEnemyAI();
-    this.updateActions();
-    this.applyRootMotion();
-    this.updateBloodlustGrabHolds();
-    this.updateBloodlustWhiffEruptions();
-    this.push.resolve(this.actors);
-    for (const actor of this.actors) this.clampToBounds(actor);
-    this.resolveHitQueries();
-    this.updateReactionMotion();
-
-    for (const a of this.actors) {
-      this.tickComboCorrection(a);
-      if (a.handfeel.hitFlashRemaining && a.handfeel.hitFlashRemaining > 0) a.handfeel.hitFlashRemaining -= 1;
-      if (a.handfeel.visualRecoilRemaining && a.handfeel.visualRecoilRemaining > 0) a.handfeel.visualRecoilRemaining -= 1;
-      if (this.status.tick(a, this.tickCount, this.bus, this.hitStop.isFrozen(a.id), this.actors)) this.scenario.bleedObserved = true;
-      this.buffs.tick(a, this.tickCount, this.bus, this.hitStop.isFrozen(a.id));
-      this.cooldowns.tick(a, this.tickCount, this.bus, this.hitStop.isFrozen(a.id));
-      if(a.resources.hp<=0) this.death.kill(a,this.tickCount,this.bus);
-    }
-
-    this.bus.emit("TickEnded", CombatEventPriority.Debug, this.tickCount, {tick:this.tickCount});
-    this.bus.flush();
-    if (this.options.enableReplay !== false) {
-      const flushedEvents = this.bus.archive.slice(replayArchiveStart);
-      this.replay.record(this.tickCount, this.actors, flushedEvents, this.inputState.snapshot(this.tickCount));
-    }
-    this.inputState.endTick();
+    for (const system of this.pipeline) system.tick(this as unknown as SystemContext, this.bus);
   }
 
   private collectInput(): void {
     const frame=this.inputState.snapshot(this.tickCount);
+    // SOCD clean — resolve conflicting opposite cardinal directions (last-input-priority)
+    frame.held = this.socd.clean(frame.held);
+    frame.pressed = this.socd.clean(frame.pressed);
     const player=this.player;
     const movementFacing=this.resolveMovementFacing(frame, player.facing);
     const canFaceFromLocomotion = !player.currentAction && ["none", "getting_up"].includes(player.reactionState);
@@ -504,8 +542,20 @@ export class CombatKernel {
 
     this.bus.emit("DamageNumberRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, amount:damage.finalDamage, sourceKind:damage.sourceKind}, {targetActorId:target.id, correlationId:corr});
     this.bus.emit("VfxRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, vfx:decision.armorDecision?.controlBlocked?"armor_spark":"hit_spark"}, {targetActorId:target.id, correlationId:corr});
-    if (attacker.id === "player" && (decision.hitbox.baseDamage >= 34 || finalReaction === "launch" || decision.armorDecision?.controlBlocked)) {
-      this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: decision.armorDecision?.controlBlocked ? 0.003 : 0.005, durationMs: decision.hitbox.baseDamage >= 34 ? 110 : 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+    if (attacker.id === "player") {
+      if (decision.isCritical) {
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 18, durationMs: 250 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xff4444, alpha: 0.5, durationMs: 100 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+      } else if (finalReaction === "launch") {
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 12, durationMs: 150 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.4, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+      } else if (decision.hitbox.baseDamage >= 34 || decision.armorDecision?.controlBlocked) {
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 12, durationMs: 150 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.4, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+      } else {
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 5, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.3, durationMs: 60 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+      }
     }
     if(damage.hpAfter<=0) {
       this.applyFrenzyBleedKillRestore(attacker, targetWasBleeding);

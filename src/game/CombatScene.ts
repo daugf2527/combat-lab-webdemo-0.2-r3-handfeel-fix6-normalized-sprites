@@ -289,7 +289,12 @@ export class CombatScene extends Phaser.Scene {
 
     this.kernel.bus.on("CameraShakeRequested", event => {
       const payload = event.payload as { intensity?: number; durationMs?: number };
-      this.cameras.main.shake(payload.durationMs ?? 90, payload.intensity ?? 0.003);
+      this.cameraController.shake(payload.intensity ?? 5, payload.durationMs ?? 80);
+    });
+
+    this.kernel.bus.on("CameraFlashRequested", event => {
+      const payload = event.payload as { color?: number; alpha?: number; durationMs?: number };
+      this.cameraController.flash(payload.color ?? 0xffffff, payload.alpha ?? 0.3, payload.durationMs ?? 60);
     });
 
     this.kernel.bus.on("DamageNumberRequested", event => {
@@ -776,6 +781,7 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
     this.kernel.inputState.keyDown(event.code, event.repeat);
+    this.kernel.socd.trackPress(event.code);
   };
 
   private handleKeyUp = (event: GameplayKeyEvent): void => {

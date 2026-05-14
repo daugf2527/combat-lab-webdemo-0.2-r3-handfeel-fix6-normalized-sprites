@@ -121,6 +121,7 @@ export class TouchControls {
       if (Math.sqrt(bdx * bdx + bdy * bdy) < btn.radius + 20 && btn.pointerId === null) {
         btn.pointerId = pointer.id;
         this.kernel.inputState.keyDown(btn.code);
+        this.kernel.socd.trackPress(btn.code);
         return;
       }
     }
@@ -190,6 +191,7 @@ export class TouchControls {
     for (const dir of newDirs) {
       if (!this.heldDirs.has(dir)) {
         this.kernel.inputState.keyDown(dir);
+        this.kernel.socd.trackPress(dir);
       }
     }
     this.heldDirs = newDirs;
