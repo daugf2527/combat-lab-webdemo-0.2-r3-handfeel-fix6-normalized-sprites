@@ -1,5 +1,5 @@
 import type { ActionName, Facing } from "../types.js";
-export type InputButton = "KeyX" | "KeyJ" | "KeyZ" | "KeyK" | "KeyC" | "KeyL" | "Space" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "KeyA" | "KeyD" | "KeyW" | "KeyS" | "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "F9";
+export type InputButton = "KeyX" | "KeyJ" | "KeyZ" | "KeyK" | "KeyC" | "KeyL" | "Space" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "KeyA" | "KeyS" | "KeyD" | "KeyF" | "KeyG" | "KeyH" | "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "F9";
 export interface RawInputFrame { tick: number; held: Set<string>; pressed: Set<string>; released: Set<string>; pressedOrder?: string[]; }
 export class BrowserInputState {
   private held = new Set<string>(); private pressed = new Set<string>(); private released = new Set<string>(); private pressedOrder: string[] = [];
@@ -28,6 +28,10 @@ export class InputBuffer {
 export interface SkillCommand { actionName: ActionName; sequence: string[]; button: string; maxGapFrames: number; holdFrames?: number; mirrorByFacing: boolean; priority: number; }
 export class CommandInputParser {
   private directionHistory: Array<{token:string; tick:number}> = [];
+  static readonly SKILL_HOTKEYS: ReadonlyArray<[string, ActionName]> = [
+    ["KeyA", "UpwardSlash"], ["KeyS", "MountainousWheel"], ["KeyD", "RagingFury"],
+    ["KeyF", "Bloodlust"], ["KeyG", "Derange"], ["KeyH", "GoreCross"],
+  ];
   readonly commands: SkillCommand[] = [
     { actionName:"Derange", sequence:["forward","forward"], button:"Space", maxGapFrames:12, mirrorByFacing:true, priority:80 },
     { actionName:"RagingFury", sequence:["down","up"], button:"KeyZ", maxGapFrames:14, mirrorByFacing:false, priority:70 },
@@ -44,11 +48,12 @@ export class CommandInputParser {
     }
     if (frame.pressed.has("KeyC") || frame.pressed.has("KeyL")) {
       if (ctx.isDowned) out.push(this.make("QuickRebound", "hotkey", frame.tick, 100));
-      else if (frame.held.has("ArrowDown") || frame.held.has("KeyS")) out.push(this.make("Backstep", "hotkey", frame.tick, 50));
+      else if (frame.held.has("ArrowDown")) out.push(this.make("Backstep", "hotkey", frame.tick, 50));
       else out.push(this.make("Jump", "hotkey", frame.tick, 45));
     }
     if (frame.pressed.has("KeyX") || frame.pressed.has("KeyJ")) out.push(this.make("NormalBasic1", "hotkey", frame.tick, 20));
     if (frame.pressed.has("KeyZ") || frame.pressed.has("KeyK")) out.push(this.make("UpwardSlash", "hotkey", frame.tick, 10));
+    for (const [key, actionName] of CommandInputParser.SKILL_HOTKEYS) { if (frame.pressed.has(key)) out.push(this.make(actionName, "hotkey", frame.tick, 35)); }
     if (frame.pressed.has("F5")) out.push(this.make("FrenzyToggle", "debug", frame.tick, 200));
     if (frame.pressed.has("F9")) out.push(this.make("ForceDownPlayer", "debug", frame.tick, 200));
     if (frame.pressed.has("F7")) out.push(this.make("ForceBleed", "debug", frame.tick, 200));
@@ -56,6 +61,6 @@ export class CommandInputParser {
     return out;
   }
   private make(actionName: ActionName, source: BufferedInput["source"], tick:number, priority:number): BufferedInput { const ttl = actionName === "QuickRebound" ? 8 : actionName === "Backstep" || actionName === "Jump" ? 6 : 10; return { actionName, source, createdFrame:tick, expiresAtFrame:tick+ttl, priority, consumed:false }; }
-  private directionTokens(frame: RawInputFrame, facing:"left"|"right"): string[] { const out:string[]=[]; if (frame.pressed.has("ArrowDown")||frame.pressed.has("KeyS")) out.push("down"); if (frame.pressed.has("ArrowUp")||frame.pressed.has("KeyW")) out.push("up"); const fwd = facing === "right" ? ["ArrowRight","KeyD"] : ["ArrowLeft","KeyA"]; if (fwd.some(k=>frame.pressed.has(k))) out.push("forward"); return out; }
+  private directionTokens(frame: RawInputFrame, facing:"left"|"right"): string[] { const out:string[]=[]; if (frame.pressed.has("ArrowDown")) out.push("down"); if (frame.pressed.has("ArrowUp")) out.push("up"); const fwd = facing === "right" ? ["ArrowRight"] : ["ArrowLeft"]; if (fwd.some(k=>frame.pressed.has(k))) out.push("forward"); return out; }
   private matchSequence(seq:string[], tick:number, gap:number): boolean { let cursor=tick; for (let i=seq.length-1;i>=0;i--) { const found = [...this.directionHistory].reverse().find(t=>t.token===seq[i] && t.tick <= cursor && cursor - t.tick <= gap); if (!found) return false; cursor = found.tick; } return true; }
 }

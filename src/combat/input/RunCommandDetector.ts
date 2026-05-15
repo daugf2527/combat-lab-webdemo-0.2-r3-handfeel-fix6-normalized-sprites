@@ -11,8 +11,8 @@ interface DirectionState {
 }
 
 const directionKeys: Record<HorizontalDirection, string[]> = {
-  left: ["ArrowLeft", "KeyA"],
-  right: ["ArrowRight", "KeyD"],
+  left: ["ArrowLeft"],
+  right: ["ArrowRight"],
 };
 
 const directionFacing: Record<HorizontalDirection, Facing> = {

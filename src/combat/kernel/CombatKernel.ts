@@ -272,16 +272,16 @@ export class CombatKernel {
   }
 
   private resolveMovementFacing(frame: { held: Set<string>; pressed: Set<string> }, currentFacing: Facing): Facing | null {
-    const leftHeld = frame.held.has("ArrowLeft") || frame.held.has("KeyA");
-    const rightHeld = frame.held.has("ArrowRight") || frame.held.has("KeyD");
+    const leftHeld = frame.held.has("ArrowLeft");
+    const rightHeld = frame.held.has("ArrowRight");
     if (leftHeld && rightHeld) return currentFacing;
-    if (rightHeld || frame.pressed.has("ArrowRight") || frame.pressed.has("KeyD")) return "right";
-    if (leftHeld || frame.pressed.has("ArrowLeft") || frame.pressed.has("KeyA")) return "left";
+    if (rightHeld || frame.pressed.has("ArrowRight")) return "right";
+    if (leftHeld || frame.pressed.has("ArrowLeft")) return "left";
     return null;
   }
 
   private isMovementHeld(): boolean {
-    return this.inputState.isHeld("ArrowLeft") || this.inputState.isHeld("ArrowRight") || this.inputState.isHeld("ArrowUp") || this.inputState.isHeld("ArrowDown") || this.inputState.isHeld("KeyA") || this.inputState.isHeld("KeyD") || this.inputState.isHeld("KeyW") || this.inputState.isHeld("KeyS");
+    return this.inputState.isHeld("ArrowLeft") || this.inputState.isHeld("ArrowRight") || this.inputState.isHeld("ArrowUp") || this.inputState.isHeld("ArrowDown");
   }
 
   requestAction(actor: Actor, actionName: ActionName, source:"command"|"hotkey"|"debug"|"ai"="debug", facing?: Facing): boolean {
@@ -546,17 +546,10 @@ export class CombatKernel {
     this.bus.emit("VfxRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, vfx:decision.armorDecision?.controlBlocked?"armor_spark":"hit_spark"}, {targetActorId:target.id, correlationId:corr});
     if (attacker.id === "player") {
       if (decision.isCritical) {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 18, durationMs: 250 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xff4444, alpha: 0.5, durationMs: 100 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-      } else if (finalReaction === "launch") {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 12, durationMs: 150 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.4, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-      } else if (decision.hitbox.baseDamage >= 34 || decision.armorDecision?.controlBlocked) {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 12, durationMs: 150 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.4, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-      } else {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 5, durationMs: 80 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xffffff, alpha: 0.3, durationMs: 60 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 8, durationMs: 120 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xff4444, alpha: 0.15, durationMs: 40 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
+      } else if (finalReaction === "launch" || decision.hitbox.baseDamage >= 34) {
+        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 3, durationMs: 60 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
       }
     }
     if(damage.hpAfter<=0) {

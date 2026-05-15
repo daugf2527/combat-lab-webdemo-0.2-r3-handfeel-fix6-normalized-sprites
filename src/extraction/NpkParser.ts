@@ -9,8 +9,6 @@ import { ByteReader } from "./ByteReader.js";
 import { NpkParseError, type NpkContainer, type NpkImgEntry } from "./types.js";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
 
 /** 16-byte magic string that identifies NPK files. */
 const NPK_MAGIC = "NeoplePack_Bill";

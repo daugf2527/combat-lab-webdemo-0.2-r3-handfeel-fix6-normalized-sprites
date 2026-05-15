@@ -2,10 +2,10 @@
 // Fighting games require resolving left+right and up+down held simultaneously.
 // Pattern: Last Input Priority — the most recently pressed direction wins.
 
-const LEFT_KEYS = new Set(["ArrowLeft", "KeyA"]);
-const RIGHT_KEYS = new Set(["ArrowRight", "KeyD"]);
-const UP_KEYS = new Set(["ArrowUp", "KeyW"]);
-const DOWN_KEYS = new Set(["ArrowDown", "KeyS"]);
+const LEFT_KEYS = new Set(["ArrowLeft"]);
+const RIGHT_KEYS = new Set(["ArrowRight"]);
+const UP_KEYS = new Set(["ArrowUp"]);
+const DOWN_KEYS = new Set(["ArrowDown"]);
 
 export class SOCDCleaner {
   private lastHorizontal: "left" | "right" | null = null;

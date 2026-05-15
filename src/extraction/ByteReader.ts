@@ -5,8 +5,6 @@
 import { ExtractionError } from "./types.js";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
 
 export class ByteReader {
   private _buf: Buffer;

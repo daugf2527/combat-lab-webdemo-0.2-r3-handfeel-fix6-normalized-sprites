@@ -64,7 +64,6 @@ export class CombatScene extends Phaser.Scene {
   private hudText: Phaser.GameObjects.Text | null = null;
   private slowMotionActive = false;
   private debugOverlayVisible = false;
-  private playerHitFlashUntil = 0;
   // F1: FPS regression tracking
   private fpsSamples: number[] = [];
   private lowFpsStartTime = 0;
@@ -74,7 +73,7 @@ export class CombatScene extends Phaser.Scene {
   // F2: Tick cost measurement
   private lastTickCostMs = 0;
   private readonly actorViews = new Map<string, ActorView>();
-  private readonly gameplayKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD", "KeyW", "KeyS", "KeyX", "KeyJ", "KeyZ", "KeyK", "KeyC", "KeyL", "Space", "F5", "F6", "F7", "F8", "F9"]);
+  private readonly gameplayKeys = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH", "KeyX", "KeyJ", "KeyZ", "KeyK", "KeyC", "KeyL", "Space", "F5", "F6", "F7", "F8", "F9"]);
   private touchControls: TouchControls | null = null;
 
   constructor() {
@@ -153,7 +152,6 @@ export class CombatScene extends Phaser.Scene {
     this.simulation.resume();
     this.simulation.setSlowMotion(1);
     this.slowMotionActive = false;
-    this.playerHitFlashUntil = 0;
     for (const graphics of this.feedbackGraphics) graphics.clear();
     this.refresh();
     this.recordRuntimeEvidence();
@@ -263,8 +261,11 @@ export class CombatScene extends Phaser.Scene {
   private bindFeedbackHandlers(): void {
     this.kernel.bus.on("ReactionApplied", event => {
       if (event.targetActorId !== "player") return;
-      this.playerHitFlashUntil = this.time.now + 200;
-      this.cameraController.shake(0.6, 100);
+      const payload = event.payload as { finalReaction?: string };
+      const reaction = payload.finalReaction ?? "";
+      if (reaction === "launch" || reaction === "knockback" || reaction === "heavy_stagger") {
+        this.cameraController.shake(0.6, 100);
+      }
     });
 
     this.kernel.bus.on("HitConfirmed", event => {
@@ -768,24 +769,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private syncPlayerFeedback(): void {
-    if (!this.playerHitFlashUntil) return;
-    const now = this.time.now;
     this.feedbackGraphics.forEach(graphics => graphics.clear());
-
-    if (now > this.playerHitFlashUntil) {
-      this.playerHitFlashUntil = 0;
-      return;
-    }
-
-    const player = this.kernel.player;
-    const baseY = this.groundLineY + player.position.z - player.position.y;
-    const x = player.position.x - 16;
-    const y = baseY - 72;
-
-    const flash = this.feedbackGraphics[0] ?? this.add.graphics().setDepth(240).setScrollFactor(1);
-    this.feedbackGraphics[0] = flash;
-    flash.lineStyle(3, 0xf43f5e, 0.95);
-    flash.strokeRect(x - 4, y - 4, 57, 81);
   }
 
   private handleKeyDown = (event: GameplayKeyEvent): void => {

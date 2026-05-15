@@ -12,7 +12,7 @@ function mulberry32(seed: number): () => number {
 }
 
 const KEYS = [
-  "KeyX", "KeyZ", "KeyC", "KeyA", "KeyD", "KeyW", "KeyS",
+  "KeyX", "KeyZ", "KeyC", "KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH",
   "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
 ];
 

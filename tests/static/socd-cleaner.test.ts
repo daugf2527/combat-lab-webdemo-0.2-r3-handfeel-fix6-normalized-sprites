@@ -24,11 +24,11 @@ import { SOCDCleaner } from "../../src/combat/input/SOCDCleaner.js";
 // Test 3: Up+Down conflict — last pressed wins
 {
   const socd = new SOCDCleaner();
-  socd.trackPress("KeyW");
-  socd.trackPress("KeyS"); // down pressed last
-  const cleaned = socd.clean(new Set(["KeyW", "KeyS"]));
-  assert.ok(!cleaned.has("KeyW"), "Up should be removed");
-  assert.ok(cleaned.has("KeyS"), "Down should remain");
+  socd.trackPress("ArrowUp");
+  socd.trackPress("ArrowDown"); // down pressed last
+  const cleaned = socd.clean(new Set(["ArrowUp", "ArrowDown"]));
+  assert.ok(!cleaned.has("ArrowUp"), "Up should be removed");
+  assert.ok(cleaned.has("ArrowDown"), "Down should remain");
 }
 
 // Test 4: Reset clears state
@@ -41,27 +41,7 @@ import { SOCDCleaner } from "../../src/combat/input/SOCDCleaner.js";
   assert.ok(cleaned.has("ArrowRight"), "Right should win after reset");
 }
 
-// Test 5: WASD aliases work correctly (KeyA = left, KeyD = right)
-{
-  const socd = new SOCDCleaner();
-  socd.trackPress("KeyA");
-  socd.trackPress("KeyD"); // right pressed last via WASD
-  const cleaned = socd.clean(new Set(["KeyA", "KeyD"]));
-  assert.ok(!cleaned.has("KeyA"), "KeyA should be removed");
-  assert.ok(cleaned.has("KeyD"), "KeyD should remain");
-}
-
-// Test 6: Arrow+WASD cross-conflict (ArrowRight + KeyA)
-{
-  const socd = new SOCDCleaner();
-  socd.trackPress("KeyA");
-  socd.trackPress("ArrowRight"); // right pressed last
-  const cleaned = socd.clean(new Set(["KeyA", "ArrowRight"]));
-  assert.ok(!cleaned.has("KeyA"), "KeyA should be removed");
-  assert.ok(cleaned.has("ArrowRight"), "ArrowRight should remain");
-}
-
-// Test 7: Action buttons are never affected
+// Test 5: Action buttons are never affected
 {
   const socd = new SOCDCleaner();
   socd.trackPress("KeyZ");
@@ -72,7 +52,7 @@ import { SOCDCleaner } from "../../src/combat/input/SOCDCleaner.js";
   assert.ok(cleaned.has("ArrowLeft"), "ArrowLeft should pass through");
 }
 
-// Test 8: Opposites released, then re-pressed — new last wins
+// Test 6: Opposites released, then re-pressed — new last wins
 {
   const socd = new SOCDCleaner();
   socd.trackPress("ArrowLeft");
@@ -84,7 +64,7 @@ import { SOCDCleaner } from "../../src/combat/input/SOCDCleaner.js";
   assert.ok(cleaned.has("ArrowRight"), "Right should remain");
 }
 
-// Test 9: Frame pressedOrder drives last-input priority without external trackPress
+// Test 7: Frame pressedOrder drives last-input priority without external trackPress
 {
   const socd = new SOCDCleaner();
   const frame = {
@@ -99,4 +79,4 @@ import { SOCDCleaner } from "../../src/combat/input/SOCDCleaner.js";
   assert.ok(cleaned.pressed.has("ArrowRight"), "Right should remain in pressed when right was last in frame order");
 }
 
-console.log("PASS: SOCD cleaner tests (9/9)");
+console.log("PASS: SOCD cleaner tests (7/7)");
