@@ -1,0 +1,102 @@
+name: Build dnf-extract
+
+on:
+  push:
+    paths:
+      - 'tools/dnf-porting-src/**'
+      - '.github/workflows/build-dnf-extract.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install dependencies
+        run: choco install mingw cmake -y
+
+      - name: Configure
+        run: |
+          cd tools/dnf-porting-src
+          mkdir build
+          cd build
+          cmake .. -G "MinGW Makefiles"
+
+      - name: Build
+        run: |
+          cd tools/dnf-porting-src/build
+          mingw32-make -j4
+
+      - name: Test --help
+        run: tools/dnf-porting-src/build/dnf-extract.exe --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnf-extract-windows-x64
+          path: tools/dnf-porting-src/build/dnf-extract.exe
+
+  build-linux-arm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake zlib1g-dev libiconv-hook-dev
+
+      - name: Configure
+        run: |
+          cd tools/dnf-porting-src
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cd tools/dnf-porting-src/build
+          make -j$(nproc)
+
+      - name: Test --help
+        run: tools/dnf-porting-src/build/dnf-extract --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnf-extract-linux-arm64
+          path: tools/dnf-porting-src/build/dnf-extract
+
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake zlib1g-dev libiconv-hook-dev
+
+      - name: Configure
+        run: |
+          cd tools/dnf-porting-src
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cd tools/dnf-porting-src/build
+          make -j$(nproc)
+
+      - name: Test --help
+        run: tools/dnf-porting-src/build/dnf-extract --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnf-extract-linux-x64
+          path: tools/dnf-porting-src/build/dnf-extract

@@ -3,6 +3,10 @@
 // Pure TypeScript, depends only on Node.js Buffer/DataView.
 
 import { ExtractionError } from "./types.js";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 export class ByteReader {
   private _buf: Buffer;
@@ -57,6 +61,15 @@ export class ByteReader {
   readUint16(): number {
     this._require(2);
     const val = this._view.getUint16(0, true);
+    this._pos += 2;
+    this._advanceView(2);
+    return val;
+  }
+
+  /** Read a 2-byte little-endian signed integer. */
+  readInt16(): number {
+    this._require(2);
+    const val = this._view.getInt16(0, true);
     this._pos += 2;
     this._advanceView(2);
     return val;

@@ -215,6 +215,14 @@ export interface SklSkillDef {
   cubeCost?: number;
   /** Maximum skill level */
   maxLevel?: number;
+  /** Cancel window data (extracted from cancel*.skl section markers) */
+  cancelWindow?: {
+    startFrame?: number;
+    duration?: number;
+    group?: number;
+    weaponMask?: number;
+    targetSlots?: number;
+  };
   /** Paths to referenced .ani animation files */
   aniFileRefs: string[];
   /** Source file path (for provenance tracking) */

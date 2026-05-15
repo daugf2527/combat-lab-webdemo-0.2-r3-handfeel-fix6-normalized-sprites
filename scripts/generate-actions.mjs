@@ -68,7 +68,8 @@ async function loadModules() {
   const { PvfParser } = await import(`file://${testJsDir}/PvfParser.js`);
   const { SklAnalyzer } = await import(`file://${testJsDir}/SklAnalyzer.js`);
   const { SklToActionMapper } = await import(`file://${testJsDir}/SklToActionMapper.js`);
-  return { PvfParser, SklAnalyzer, SklToActionMapper };
+  const { AniAnalyzer } = await import(`file://${testJsDir}/AniAnalyzer.js`);
+  return { PvfParser, SklAnalyzer, SklToActionMapper, AniAnalyzer };
 }
 
 // ── Main pipeline ──
@@ -77,7 +78,7 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
 
   console.log("Loading compiled modules from .tmp/test-js/...");
-  const { PvfParser, SklAnalyzer, SklToActionMapper } = await loadModules();
+  const { PvfParser, SklAnalyzer, SklToActionMapper, AniAnalyzer } = await loadModules();
 
   console.log(`Loading Script.pvf: ${opts.pvf}`);
   const pvfBuf = readFileSync(opts.pvf);
@@ -105,6 +106,32 @@ async function main() {
     process.exit(0);
   }
 
+  // Build string lookup table
+  let stringBinMap = undefined;
+  const stEntry = container.files.find(f => f.path.toLowerCase().endsWith("stringtable.bin"));
+  if (stEntry) {
+    const stBuf = PvfParser.extractFile(pvfBuf, container, stEntry.path);
+    if (stBuf) {
+      const lookup = SklAnalyzer.buildStringLookup(stBuf);
+      // Also build stringBinMap array for two-level resolution
+      const entries = [];
+      for (const [idx, str] of lookup) entries.push({ index: idx, string: str });
+      let maxIdx = 0;
+      for (const e of entries) if (e.index > maxIdx) maxIdx = e.index;
+      stringBinMap = new Array(maxIdx + 1).fill("");
+      for (const e of entries) stringBinMap[e.index] = e.string;
+      console.log(`String table loaded: ${lookup.size} entries`);
+    }
+  }
+
+  // Build .ani file index for quick lookup
+  const aniFiles = container.files.filter(f => f.path.toLowerCase().endsWith(".ani"));
+  const aniFileIndex = new Map();
+  for (const f of aniFiles) {
+    aniFileIndex.set(f.path.toLowerCase(), f);
+  }
+  console.log(`ANI file index: ${aniFileIndex.size} files`);
+
   // Process each .skl
   const results = [];
   let successCount = 0;
@@ -123,11 +150,29 @@ async function main() {
         continue;
       }
 
-      // Parse with SklAnalyzer
-      const sklDef = SklAnalyzer.parseAndAnalyze(data, undefined, entry.path);
+      // Parse with SklAnalyzer (pass stringBinMap for two-level resolution)
+      const sklDef = SklAnalyzer.parseAndAnalyze(data, undefined, entry.path, stringBinMap);
+
+      // Try to load and parse .ani files referenced by this skill
+      let ani = undefined;
+      if (sklDef.aniFileRefs.length > 0) {
+        for (const aniRef of sklDef.aniFileRefs) {
+          const normalizedRef = aniRef.toLowerCase().replace(/\\/g, "/");
+          const aniEntry = aniFileIndex.get(normalizedRef);
+          if (aniEntry) {
+            try {
+              const aniBuf = PvfParser.extractFile(pvfBuf, container, aniEntry.path);
+              if (aniBuf) {
+                ani = AniAnalyzer.parse(aniBuf, aniEntry.path);
+                break;
+              }
+            } catch {}
+          }
+        }
+      }
 
       // Map to FrameDataAction format
-      const mapped = SklToActionMapper.map(sklDef, undefined);
+      const mapped = SklToActionMapper.map(sklDef, ani);
 
       results.push(mapped);
       successCount++;

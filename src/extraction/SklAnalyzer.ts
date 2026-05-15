@@ -11,12 +11,14 @@
 
 import { PvfScriptParser } from "./PvfScriptParser.js";
 import type { PvfScriptCommand, PvfScriptFile, SklSkillDef } from "./types.js";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 /** Known skill property command IDs (from community PVF documentation).
  *  These are the command values that appear after section markers
- *  in .skl files. Mapping is incomplete — unverified fields are tracked. */
+ *  in .skl files. When stringBinMap is available, command values are resolved
+ *  to strings and matched against KNOWN_PROPERTY_NAMES instead. */
 const KNOWN_PROPERTY_IDS: Record<number, string> = {
-  // Common skill metadata (community-sourced, unverified)
   0x00: "skillId",
   0x01: "jobId",
   0x02: "level",
@@ -28,41 +30,56 @@ const KNOWN_PROPERTY_IDS: Record<number, string> = {
   0x08: "commandInput",
   0x09: "iconIndex",
   0x0A: "aniIndex",
-  // Skill type / flags
   0x10: "skillType",
   0x11: "damageType",
   0x12: "elementType",
-  // Animation references (command IDs that hold .ani paths)
   0x20: "castAni",
   0x21: "hitAni",
   0x22: "effectAni",
 };
 
+/** String-based property name matching (used when stringBinMap resolves command values).
+ *  Keys are lowercased resolved strings from stringBinMap. */
+const KNOWN_PROPERTY_NAMES: Record<string, string> = {
+  "(down)": "commandInput",
+  "(up)": "commandInput",
+  "(left)": "commandInput",
+  "(right)": "commandInput",
+  "(skill)": "commandInput",
+  "(attack)": "commandInput",
+  "(jump)": "commandInput",
+};
+
+/** Section tag names that map to skill properties.
+ *  When a section tag is encountered, the next int/string value is the property value. */
+const SECTION_PROPERTY_MAP: Record<string, string> = {
+  "[name]": "name",
+  "[name2]": "name2",
+  "[maximum level]": "maxLevel",
+  "[required level]": "requiredLevel",
+  "[type]": "skillType",
+  "[skill class]": "skillClass",
+  "[icon]": "iconIndex",
+  "[growtype maximum level]": "growtypeMaxLevel",
+  "[purchase cost]": "purchaseCost",
+};
+
 /** Section IDs found in cancel*.skl files (reverse-engineered from DNF Script.pvf,
- *  2026-05). These section markers encode cancel window configuration:
- *  - 371543: cancel window start frame (e.g. Gorecross=50, Backstep=70, Smasher=10)
- *  - 241483: cancel window duration in frames (e.g. Gorecross=20, Bloodsword=40)
- *  - 371546: cancel group/type (0-4, e.g. Gorecross=2, Vaneslash=0, Backstep=4)
- *  - 371547: weapon-type bitmask (6 bits; [1,1,1,1,1,1]=universal)
- *  - 371549: allowed target slot list ([3]=single, [0-4]=all 5 hotbar slots)
- *  - 18696: skill level required for cancel (always 1 in cancel files)
- *  - 5978:  skill category string ID ("12149"=cancel category, "12350"=skill name)
- *  - 371586: subclass additional skill refs (demonic swordman advanced classes)
- *  - 18419: animation frame refs (string ID + int frame-number pairs)
- *  - 371575: file terminator (checksum)
- * See docs/research/pvf-ani-toolchain-research.md and crt-002-frame-evidence.md
- * for background on why cancel windows were previously thought unextractable. */
+ *  2026-05). These are raw stringBinMap indices. When resolved:
+ *  - 371543 → "[purchase cost]" (used as cancel window start in cancel files)
+ *  - 241483 → "[required level]" (used as cancel window duration in cancel files)
+ *  - 371546 → "[skill class]" (used as cancel group in cancel files)
+ *  - 371547 → "[growtype maximum level]" (used as cancel weapon mask in cancel files)
+ *  - 371549 → "[skill fitness growtype]" (used as cancel target slots in cancel files)
+ *  Note: These section tags have dual meaning — in regular .skl files they are
+ *  standard skill properties; in cancel*.skl files the int values following them
+ *  encode cancel window parameters. Detection relies on file path containing "cancel". */
 const CANCEL_SECTION_IDS: Record<number, string> = {
   371543: "cancelWindowStart",
   241483: "cancelWindowDuration",
   371546: "cancelGroup",
   371547: "cancelWeaponMask",
   371549: "cancelTargetSlots",
-  18696:  "cancelRequiredLevel",
-  5978:   "cancelCategoryString",
-  371586: "cancelSubclassRefs",
-  18419:  "cancelAnimFrameRefs",
-  371575: "cancelFileTerminator",
 };
 
 /** Extract potential .ani file references from command streams.
@@ -86,75 +103,135 @@ export class SklAnalyzer {
     scriptFile: PvfScriptFile,
     stringTable?: Map<number, string>,
     sourcePath?: string,
+    stringBinMap?: string[],
+    stringStringMap?: Map<string, string>,
   ): SklSkillDef {
     const commands = scriptFile.commands;
     const unverifiedFields: string[] = [];
     const aniFileRefs: string[] = [];
     const props: Record<string, number | string> = {};
     let currentSection = 0;
+    const cancelProps: Record<string, number> = {};
 
-    // Track string link indices for resolution
-    const stringRefs: Array<{ commandIdx: number; stringIdx: number }> = [];
+    // Helper: resolve a raw command value through stringBinMap if available
+    const resolveStr = (rawValue: number): string | undefined => {
+      if (stringBinMap && rawValue < stringBinMap.length) {
+        return stringBinMap[rawValue] || undefined;
+      }
+      return undefined;
+    };
 
     for (let i = 0; i < commands.length; i++) {
       const cmd = commands[i]!;
 
       switch (cmd.type) {
-        case "section":
-          // Section markers define new property groups
-          // The int value is the section number
-          if (typeof cmd.value === "number") {
-            currentSection = cmd.value;
-          }
-          break;
-
-        case "command":
-          // Command values are property identifiers
-          // Next one or two commands typically hold the value
-          if (typeof cmd.value === "number") {
-            const propName = KNOWN_PROPERTY_IDS[cmd.value] ?? `cmd_0x${cmd.value.toString(16).padStart(2, "0")}`;
-            if (!KNOWN_PROPERTY_IDS[cmd.value]) {
-              unverifiedFields.push(propName);
+        case "section": {
+          if (typeof cmd.value !== "number") break;
+          currentSection = cmd.value;
+          // Check cancel section IDs (matched on raw index, only meaningful in cancel files)
+          const cancelField = CANCEL_SECTION_IDS[cmd.value];
+          if (cancelField && i + 1 < commands.length) {
+            const nextCmd = commands[i + 1]!;
+            if ((nextCmd.type === "int" || nextCmd.type === "intEx") && typeof nextCmd.value === "number") {
+              cancelProps[cancelField] = nextCmd.value;
             }
-
-            // Look ahead for the property value (int/float/string/stringLink)
-            if (i + 1 < commands.length) {
+          }
+          // Resolve section tag name and extract property values
+          const sectionTag = resolveStr(cmd.value);
+          if (sectionTag) {
+            const sectionProp = SECTION_PROPERTY_MAP[sectionTag];
+            if (sectionProp && i + 1 < commands.length) {
               const nextCmd = commands[i + 1]!;
               if (nextCmd.type === "int" || nextCmd.type === "intEx") {
-                props[propName] = nextCmd.value as number;
-              } else if (nextCmd.type === "float") {
-                props[propName] = nextCmd.value as number;
-              } else if (nextCmd.type === "string") {
-                const strVal = nextCmd.value as string;
-                props[propName] = strVal;
-                if (looksLikeAniPath(strVal)) {
-                  aniFileRefs.push(strVal);
+                props[sectionProp] = nextCmd.value as number;
+              } else if (nextCmd.type === "string" && typeof nextCmd.value === "number") {
+                const strVal = resolveStr(nextCmd.value) ?? String(nextCmd.value);
+                props[sectionProp] = strVal;
+              } else if (nextCmd.type === "stringLinkIndex" && typeof nextCmd.value === "number") {
+                const idx = nextCmd.value;
+                if (stringBinMap && idx < stringBinMap.length) {
+                  const key = stringBinMap[idx]!;
+                  props[sectionProp] = stringStringMap?.get(key) ?? key;
                 }
-              } else if (nextCmd.type === "stringLinkIndex") {
-                stringRefs.push({
-                  commandIdx: i,
-                  stringIdx: nextCmd.value as number,
-                });
               }
             }
           }
           break;
+        }
+
+        case "command": {
+          if (typeof cmd.value !== "number") break;
+          // Resolve command value: try stringBinMap first, fall back to hex ID table
+          const resolvedName = resolveStr(cmd.value);
+          const propName = (resolvedName && KNOWN_PROPERTY_NAMES[resolvedName])
+            ?? KNOWN_PROPERTY_IDS[cmd.value]
+            ?? (resolvedName || `cmd_0x${cmd.value.toString(16).padStart(2, "0")}`);
+
+          if (!KNOWN_PROPERTY_NAMES[resolvedName ?? ""] && !KNOWN_PROPERTY_IDS[cmd.value]) {
+            unverifiedFields.push(propName);
+          }
+
+          if (i + 1 < commands.length) {
+            const nextCmd = commands[i + 1]!;
+            if (nextCmd.type === "int" || nextCmd.type === "intEx") {
+              props[propName] = nextCmd.value as number;
+            } else if (nextCmd.type === "float") {
+              props[propName] = nextCmd.value as number;
+            } else if (nextCmd.type === "string") {
+              // type=7 value is a stringBinMap index
+              const strVal = resolveStr(nextCmd.value as number) ?? String(nextCmd.value);
+              props[propName] = strVal;
+              if (looksLikeAniPath(strVal)) {
+                aniFileRefs.push(strVal);
+              }
+            } else if (nextCmd.type === "stringLinkIndex") {
+              const idx = nextCmd.value as number;
+              if (stringBinMap && idx < stringBinMap.length) {
+                const key = stringBinMap[idx]!;
+                const resolved = stringStringMap?.get(key) ?? key;
+                if (resolved) {
+                  props[propName] = resolved;
+                  if (looksLikeAniPath(resolved)) {
+                    aniFileRefs.push(resolved);
+                  }
+                }
+              } else if (stringTable) {
+                const resolved = stringTable.get(idx);
+                if (resolved) {
+                  props[propName] = resolved;
+                  if (looksLikeAniPath(resolved)) {
+                    aniFileRefs.push(resolved);
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
 
         case "stringLink":
-          // Direct string link with index — resolve via stringtable
-          if (typeof cmd.value === "number" && stringTable) {
+          if (typeof cmd.value === "number" && stringBinMap && cmd.value < stringBinMap.length) {
+            const key = stringBinMap[cmd.value]!;
+            const resolved = stringStringMap?.get(key) ?? key;
+            if (resolved && looksLikeAniPath(resolved)) {
+              aniFileRefs.push(resolved);
+            }
+          } else if (typeof cmd.value === "number" && stringTable) {
             const resolved = stringTable.get(cmd.value);
-            if (resolved) {
-              if (looksLikeAniPath(resolved)) {
-                aniFileRefs.push(resolved);
-              }
+            if (resolved && looksLikeAniPath(resolved)) {
+              aniFileRefs.push(resolved);
             }
           }
           break;
 
         case "string":
-          // Standalone string value (not preceded by a command marker)
-          if (typeof cmd.value === "string" && looksLikeAniPath(cmd.value)) {
+          // type=7 value is a stringBinMap index — resolve it
+          if (typeof cmd.value === "number") {
+            const resolved = resolveStr(cmd.value);
+            if (resolved && looksLikeAniPath(resolved)) {
+              aniFileRefs.push(resolved);
+            }
+          } else if (typeof cmd.value === "string" && looksLikeAniPath(cmd.value)) {
             aniFileRefs.push(cmd.value);
           }
           break;
@@ -166,6 +243,17 @@ export class SklAnalyzer {
       ?? stringTable?.get(props["skillId"] as number)
       ?? (sourcePath ? sourcePath.replace(/^.*[\\/]skill_[^_]+_/, "").replace(/\.skl$/, "") : undefined);
 
+    // Build cancel window if any cancel props were found
+    const cancelWindow = (cancelProps["cancelWindowStart"] !== undefined || cancelProps["cancelWindowDuration"] !== undefined)
+      ? {
+          startFrame: cancelProps["cancelWindowStart"],
+          duration: cancelProps["cancelWindowDuration"],
+          group: cancelProps["cancelGroup"],
+          weaponMask: cancelProps["cancelWeaponMask"],
+          targetSlots: cancelProps["cancelTargetSlots"],
+        }
+      : undefined;
+
     return {
       skillId: (props["skillId"] as number) ?? 0,
       name,
@@ -175,6 +263,7 @@ export class SklAnalyzer {
       consumeMp: props["consumeMp"] as number | undefined,
       cubeCost: props["cubeCost"] as number | undefined,
       maxLevel: props["maxLevel"] as number | undefined,
+      cancelWindow,
       aniFileRefs: [...new Set(aniFileRefs)],
       sourcePath,
       commandCount: commands.length,
@@ -193,9 +282,11 @@ export class SklAnalyzer {
     buf: Buffer,
     stringTable?: Map<number, string>,
     sourcePath?: string,
+    stringBinMap?: string[],
+    stringStringMap?: Map<string, string>,
   ): SklSkillDef {
     const scriptFile = PvfScriptParser.parse(buf);
-    return SklAnalyzer.analyze(scriptFile, stringTable, sourcePath);
+    return SklAnalyzer.analyze(scriptFile, stringTable, sourcePath, stringBinMap, stringStringMap);
   }
 
   /**
@@ -208,36 +299,65 @@ export class SklAnalyzer {
   static buildStringTable(
     stringTableBuf: Buffer,
     nStringLstBuf: Buffer,
+    extractFileContent?: (path: string) => Buffer | undefined,
+  ): { stringBinMap: string[]; stringStringMap: Map<string, string> } {
+    // Phase 1: parse stringtable.bin → stringBinMap (index → string)
+    const entries = PvfScriptParser.parseStringTable(stringTableBuf);
+    let maxIdx = 0;
+    for (const e of entries) {
+      if (e.index > maxIdx) maxIdx = e.index;
+    }
+    const stringBinMap: string[] = new Array(maxIdx + 1).fill("");
+    for (const e of entries) {
+      stringBinMap[e.index] = e.string;
+    }
+
+    // Phase 2: parse n_string.lst → get .kor.str file paths
+    const nStringRefs = PvfScriptParser.parseNStringLst(nStringLstBuf, stringBinMap);
+
+    // Phase 3: resolve .kor.str files into stringStringMap (key → localized value)
+    const stringStringMap = new Map<string, string>();
+
+    if (extractFileContent) {
+      for (const [, filePath] of nStringRefs) {
+        if (!filePath || !filePath.endsWith(".str")) continue;
+        try {
+          const content = extractFileContent(filePath);
+          if (!content) continue;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const iconv = require("iconv-lite");
+          const text: string = iconv.decode(content, "cp949");
+          const lines = text.split(/\r?\n/);
+          for (const line of lines) {
+            const gtPos = line.indexOf(">");
+            if (gtPos > 0) {
+              const key = line.substring(0, gtPos).trim();
+              const val = line.substring(gtPos + 1).trim();
+              if (key && val) {
+                stringStringMap.set(key, val);
+              }
+            }
+          }
+        } catch {
+          // Skip unreadable .str files
+        }
+      }
+    }
+
+    return { stringBinMap, stringStringMap };
+  }
+
+  /**
+   * Build a simple index→string Map from stringBinMap for backward compatibility.
+   */
+  static buildStringLookup(
+    stringTableBuf: Buffer,
   ): Map<number, string> {
     const result = new Map<number, string>();
-
-    // Parse stringtable.bin with EUC-KR decoding (handles dual offset modes)
-    const stringEntries = PvfScriptParser.parseStringTable(stringTableBuf);
-    for (const entry of stringEntries) {
+    const entries = PvfScriptParser.parseStringTable(stringTableBuf);
+    for (const entry of entries) {
       result.set(entry.index, entry.string);
     }
-
-    // Parse n_string.lst (binary bytecode format — NOT text)
-    const lstMap = PvfScriptParser.parseNStringLst(nStringLstBuf);
-
-    // Merge n_string.lst key-value pairs: try "name" → resolved name
-    for (const [sectionIndex, pairs] of lstMap) {
-      const name = pairs.get("name") ?? pairs.get("Name") ?? pairs.get("skillName");
-      if (name) {
-        // Use section index as key; stringtable may also have entries at this index
-        if (!result.has(sectionIndex)) {
-          result.set(sectionIndex, name);
-        }
-      }
-      // Also merge individual pairs that look like name mappings
-      for (const [key, value] of pairs) {
-        if (key && value && !key.startsWith("_")) {
-          // Index this by a hash of the key for cross-reference
-          // The exact mapping scheme depends on how DNF references these
-        }
-      }
-    }
-
     return result;
   }
 }

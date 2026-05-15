@@ -6,6 +6,8 @@
 
 import { ByteReader } from "./ByteReader.js";
 import type { PvfScriptCommand, PvfScriptFile, PvfScriptType, EquipmentDefinition } from "./types.js";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 /** Magic bytes for .skl files. */
 const SKL_MAGIC_B0 = 0xb0;
@@ -136,8 +138,6 @@ export class PvfScriptParser {
     if (buf.length < 4) return [];
 
     const count = buf.readUInt32LE(0);
-    const indexAreaSize = count * 8;
-    const stringBlockStart = 4 + indexAreaSize;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const iconv = require("iconv-lite");
@@ -145,31 +145,21 @@ export class PvfScriptParser {
     const results: Array<{ index: number; string: string }> = [];
 
     for (let i = 0; i < count; i++) {
-      const indexOff = 4 + i * 8;
-      if (indexOff + 8 > buf.length) break;
-
-      const start = buf.readUInt32LE(indexOff);
-      const end = buf.readUInt32LE(indexOff + 8);
-      const len = end - start;
+      const startPos = buf.readUInt32LE(i * 4 + 4);
+      const endPos = buf.readUInt32LE(i * 4 + 8);
+      const len = endPos - startPos;
 
       if (len <= 0 || len > 10000) continue;
 
-      // Try relative offset first (stringBlockStart + start)
-      let absStart = stringBlockStart + start;
-      let absEnd = absStart + len;
+      const absStart = startPos + 4;
+      const absEnd = absStart + len;
 
-      // If relative goes past buffer, try absolute offset
-      if (absEnd > buf.length) {
-        absStart = start;
-        absEnd = start + len;
-      }
-
-      // Still out of bounds — skip
       if (absStart < 0 || absEnd > buf.length || absStart >= buf.length) continue;
 
       try {
         const slice = buf.subarray(absStart, absEnd);
-        const decoded = iconv.decode(Buffer.from(slice), "cp949").replace(/\x00/g, "");
+        let decoded = iconv.decode(Buffer.from(slice), "cp949").replace(/\x00/g, "");
+        decoded = decoded.toLowerCase().trim();
         if (decoded.length > 0) {
           results.push({ index: i, string: decoded });
         }
@@ -188,78 +178,22 @@ export class PvfScriptParser {
    *
    * Returns a Map of string table index → Map<key, value> pairs.
    */
-  static parseNStringLst(buf: Buffer): Map<number, Map<string, string>> {
-    const result = new Map<number, Map<string, string>>();
+  static parseNStringLst(buf: Buffer, stringBinMap?: string[]): Map<number, string> {
+    const result = new Map<number, string>();
+    if (buf.length < 2) return result;
 
-    // Parse as bytecode script (n_string.lst starts with 0xB0 0xD0 magic)
-    const scriptFile = PvfScriptParser.parse(buf);
+    const magic = buf.readUInt16LE(0);
+    if (magic !== 53424) return result;
 
-    let currentIndex = -1;
-    let currentPairs = new Map<string, string>();
-    let lastKey: string | null = null;
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const iconv = require("iconv-lite");
-
-    for (const cmd of scriptFile.commands) {
-      // Section markers (type 5) may indicate a new index group
-      if (cmd.type === "section" && typeof cmd.value === "number") {
-        // Save previous section if it had content
-        if (currentIndex >= 0 && currentPairs.size > 0) {
-          result.set(currentIndex, currentPairs);
+    for (let i = 2; i < buf.length; i += 10) {
+      if (buf.length - i < 10) break;
+      const stringIdx = buf.readUInt32LE(i + 6);
+      if (stringBinMap && stringIdx < stringBinMap.length) {
+        const filePath = stringBinMap[stringIdx]!;
+        if (filePath) {
+          result.set(stringIdx, filePath);
         }
-        currentIndex = cmd.value;
-        currentPairs = new Map<string, string>();
-        lastKey = null;
-        continue;
       }
-
-      // String values (type 7) — could be a key or a value
-      if (cmd.type === "string" && typeof cmd.value === "string") {
-        const strVal = cmd.value;
-        if (lastKey === null) {
-          // First string in a pair is the key
-          lastKey = strVal;
-        } else {
-          // Second string is the value
-          currentPairs.set(lastKey, strVal);
-          lastKey = null;
-        }
-        continue;
-      }
-
-      // Int values (type 2/3) might be standalone indices
-      if ((cmd.type === "int" || cmd.type === "intEx") && typeof cmd.value === "number") {
-        // If we have no current index and this looks like an index, start new section
-        if (currentIndex < 0) {
-          currentIndex = cmd.value;
-          currentPairs = new Map<string, string>();
-          lastKey = null;
-        }
-        continue;
-      }
-
-      // stringLinkIndex (type 9) and stringLink (type 10) — resolve via iconv
-      if (cmd.type === "stringLinkIndex" || cmd.type === "stringLink") {
-        // These reference the stringtable; handled by the caller
-        continue;
-      }
-
-      // commandSeparator (type 8) — delimiter between groups
-      if (cmd.type === "commandSeparator") {
-        if (currentIndex >= 0 && currentPairs.size > 0) {
-          result.set(currentIndex, currentPairs);
-        }
-        currentIndex = -1;
-        currentPairs = new Map<string, string>();
-        lastKey = null;
-        continue;
-      }
-    }
-
-    // Save final section
-    if (currentIndex >= 0 && currentPairs.size > 0) {
-      result.set(currentIndex, currentPairs);
     }
 
     return result;

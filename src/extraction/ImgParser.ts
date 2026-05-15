@@ -159,14 +159,14 @@ export class ImgParser {
       const frame = frames[dOff.frameIndex];
       if (!frame || frame.type !== "image" || frame.error) continue;
 
-      const bytesToRead = Math.min(dOff.dataSize, reader.remaining - dOff.offset);
+      // Position the reader at the frame's data offset first
+      reader.position = dataStart + dOff.offset;
+      const bytesToRead = Math.min(dOff.dataSize, reader.remaining);
       if (bytesToRead <= 0) {
         frame.error = "TRUNCATED_DATA";
         continue;
       }
 
-      // Position the reader at the frame's data offset
-      reader.position = dataStart + dOff.offset;
       const rawData = reader.readBytes(bytesToRead);
 
       if (frame.compression === 6 && decompress) {

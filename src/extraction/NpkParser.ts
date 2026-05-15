@@ -7,6 +7,10 @@
 import { createHash } from "node:crypto";
 import { ByteReader } from "./ByteReader.js";
 import { NpkParseError, type NpkContainer, type NpkImgEntry } from "./types.js";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
 
 /** 16-byte magic string that identifies NPK files. */
 const NPK_MAGIC = "NeoplePack_Bill";
@@ -71,6 +75,7 @@ export class NpkParser {
     }
 
     // 4. Read stored checksum (32 bytes)
+    const checksumFieldStart = reader.position;
     let storedChecksum = "";
     try {
       storedChecksum = reader.readBytes(NPK_CHECKSUM_SIZE).toString("hex");
@@ -80,8 +85,8 @@ export class NpkParser {
 
     // 5. Compute SHA256 checksum
     // Checksum covers: all bytes from start through end of index block
-    // (i.e., everything except the checksum itself)
-    const dataForChecksum = buf.subarray(0, buf.length - (reader.remaining > 0 ? reader.remaining : 0));
+    // (i.e., everything before the checksum field itself)
+    const dataForChecksum = buf.subarray(0, checksumFieldStart);
     const computedChecksum = createHash("sha256").update(dataForChecksum).digest("hex");
     const checksumMatches = storedChecksum === computedChecksum;
 

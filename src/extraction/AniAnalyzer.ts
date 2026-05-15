@@ -1,141 +1,146 @@
 // AniAnalyzer — Binary parser for DNF .ani animation files.
-// Extracts frame data, hitbox/collision box definitions, and animation metadata.
+// Based on flwmxd/DNF-Porting PvfAnimation.cpp reference implementation.
 //
-// .ani files are compiled binary format stored inside Script.pvf (NOT ImagePacks2).
-// They reference .img sprite files and define per-frame hitbox regions used by
-// the DNF combat engine.
+// .ani files are compiled binary format stored inside Script.pvf.
+// They define per-frame hitbox regions, sprite references, and animation properties.
 //
-// Binary format (reverse-engineered from DNF Script.pvf samples, 2026-05):
-//   Offset  Size  Description
-//   0x00    1     Version byte (0x01–0x0f observed)
-//   0x01    2     Reserved / sub-version (usually 0x00 0x01 or 0x00 0x02)
-//   0x03    1     Reserved
-//   0x04    4     String length (uint32 LE)
-//   0x08    N     .img file path (CP949/ASCII)
-//   0x08+N  -     Frame data section (variable-length, version-dependent records)
-//
-// Frame record structure (varies by version byte):
-//   Common patterns across versions:
-//   - Records start with a frame index (u32 or u16)
-//   - Coordinate data uses s16 values (typically in range [-2000, 2000])
-//   - Each version has a characteristic record size
-//   - Hitbox data encodes: x1,y1,z1,x2,y2,z2 as 6 s16 values
-//
-// Version-specific record sizes observed:
-//   v1 (0x01): ~24 bytes per record
-//   v2 (0x02): ~27 bytes
-//   v3 (0x03): ~34 bytes
-//   v5 (0x05): ~31 bytes
-//   v9 (0x09): ~30 bytes
-//   v15 (0x0f): ~27 bytes
+// Binary format (from reference implementation):
+//   [2B] framesCount (uint16)
+//   [2B] resourceCount (uint16)
+//   for each resource:
+//     [4B] stringLength (int32)
+//     [N]  sprite path (ASCII)
+//   [2B] globalParamCount (uint16)
+//   for each global param:
+//     [2B] type (AnimationNodeType)
+//     [variable] value
+//   for each frame:
+//     [2B] boxCount (uint16)
+//     for each box:
+//       [2B] type (14=DAMAGE_BOX, 15=ATTACK_BOX)
+//       [6×4B] int32 coords (x1,y1,z1,x2,y2,z2)
+//     [2B] imgId (uint16)
+//     [2B] imgParam (uint16)
+//     [4B] x offset (int32)
+//     [4B] y offset (int32)
+//     [2B] propertyCount (uint16)
+//     for each property:
+//       [2B] type (AnimationNodeType)
+//       [variable] value based on type
 
 import { ByteReader } from "./ByteReader.js";
 import type { AniDef, AniHitBox, PvfContainer } from "./types.js";
 import { PvfParser } from "./PvfParser.js";
 
-/** Minimum .ani file size: version(1)+reserved(3)+strLen(4)+at least 1 char = 9 bytes */
-const MIN_ANI_SIZE = 9;
+const DAMAGE_BOX = 14;
+const ATTACK_BOX = 15;
 
-/** Known per-version record sizes (bytes), mapped from hex analysis */
-const VERSION_RECORD_SIZE: Record<number, number> = {
-  1: 24,   // tiny-93B
-  2: 27,   // small-121B
-  3: 34,   // medium-135B / med2-157B
-  5: 31,   // large-197B
-  9: 30,   // anims-309B
-  15: 27,  // anims-669B (v15 with sub-version 0x02)
-};
-
-/** Fallback record sizes to try when version is unknown */
-const FALLBACK_RECORD_SIZES = [24, 27, 30, 31, 32, 34, 36, 40];
+enum AniNodeType {
+  LOOP = 0,
+  SHADOW = 1,
+  COORD = 3,
+  IMAGE_RATE = 7,
+  IMAGE_ROTATE = 8,
+  RGBA = 9,
+  INTERPOLATION = 10,
+  GRAPHIC_EFFECT = 11,
+  DELAY = 12,
+  DAMAGE_TYPE = 13,
+  PLAY_SOUND = 16,
+  PRELOAD = 17,
+  SET_FLAG = 23,
+  FLIP_TYPE = 24,
+  LOOP_START = 25,
+  LOOP_END = 26,
+  CLIP = 27,
+}
 
 export class AniAnalyzer {
-  /**
-   * Parse a raw .ani binary buffer into a structured AniDef.
-   *
-   * The parser handles version-dependent frame record formats.
-   * Unknown sections are preserved in rawSections for forward compatibility.
-   *
-   * @param buf — raw .ani file bytes
-   * @param sourcePath — source path for provenance
-   * @returns structured AniDef with extracted hitboxes and metadata
-   */
   static parse(buf: Buffer, sourcePath?: string): AniDef {
     const parseWarnings: string[] = [];
     const rawSections: Array<{ type: string; offset: number; size: number }> = [];
-
-    // 1. Validate minimum size
-    if (buf.length < MIN_ANI_SIZE) {
-      return {
-        imgPath: "",
-        totalFrames: 0,
-        hitBoxes: [],
-        rawSections: [],
-        sourcePath,
-        parseWarnings: ["File too small to contain valid .ani header"],
-      };
-    }
-
-    // 2. Read version byte and validate
-    const version = buf[0]!;
-    const subVersion = buf.readUInt16LE(1);
-    parseWarnings.push(`Version ${version}, sub-version ${subVersion}`);
-
-    // 3. Read .img path string (length-prefixed, at offset 4)
-    const strLen = buf.readUInt32LE(4);
-    let imgPath = "";
-    if (strLen > 0 && strLen <= buf.length - 8) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const iconv = require("iconv-lite");
-        imgPath = iconv.decode(buf.subarray(8, 8 + strLen), "cp949").replace(/\x00/g, "");
-      } catch {
-        imgPath = buf.subarray(8, 8 + strLen).toString("ascii").replace(/\x00/g, "");
-      }
-    } else if (strLen > buf.length - 8) {
-      parseWarnings.push(`String length ${strLen} exceeds remaining data`);
-    }
-
-    // 4. Parse frame data section
-    const frameDataStart = 8 + strLen;
-    const frameDataSize = buf.length - frameDataStart;
-    if (frameDataSize > 0) {
-      rawSections.push({ type: "frameData", offset: frameDataStart, size: frameDataSize });
-    }
-
     const hitBoxes: AniHitBox[] = [];
-    let totalFrames = 0;
 
-    if (frameDataSize > 0) {
-      const frameData = buf.subarray(frameDataStart);
+    if (buf.length < 4) {
+      return { imgPath: "", totalFrames: 0, hitBoxes: [], rawSections: [], sourcePath, parseWarnings: ["File too small"] };
+    }
 
-      // Determine record size (version-aware)
-      const recordSize = AniAnalyzer.detectRecordSize(frameData, version);
-      if (recordSize === 0) {
-        parseWarnings.push(`Cannot determine frame record size (v${version}, ${frameDataSize} bytes)`);
-      } else {
-        totalFrames = Math.floor(frameDataSize / recordSize);
-        parseWarnings.push(`Record size ${recordSize} bytes, ${totalFrames} frames`);
+    const reader = new ByteReader(buf);
+    let sprites: string[] = [];
 
-        // Parse each frame record
-        for (let f = 0; f < totalFrames; f++) {
-          const recordOffset = f * recordSize;
-          const record = frameData.subarray(recordOffset, recordOffset + recordSize);
+    try {
+      // Header
+      const framesCount = reader.readUint16();
+      const resourceCount = reader.readUint16();
 
-          const frameInfo = AniAnalyzer.parseFrameRecord(record, recordSize, f, version);
-          if (frameInfo.hitBox) {
-            hitBoxes.push(frameInfo.hitBox);
+      // Read sprite resource paths
+      for (let i = 0; i < resourceCount; i++) {
+        const strLen = reader.readInt32();
+        if (strLen <= 0 || strLen > 1024) {
+          parseWarnings.push(`Invalid resource string length: ${strLen}`);
+          break;
+        }
+        const pathBytes = reader.readBytes(strLen);
+        sprites.push(Buffer.from(pathBytes).toString("ascii").toLowerCase().replace(/\x00/g, ""));
+      }
+
+      // Global animation params
+      const globalParamCount = reader.readUint16();
+      for (let j = 0; j < globalParamCount; j++) {
+        const type = reader.readUint16();
+        AniAnalyzer.skipParamValue(reader, type);
+      }
+
+      // Parse each frame
+      for (let i = 0; i < framesCount; i++) {
+        if (reader.remaining < 2) break;
+
+        // Boxes (damage/attack)
+        const boxCount = reader.readUint16();
+        for (let j = 0; j < boxCount; j++) {
+          if (reader.remaining < 26) break;
+          const boxType = reader.readUint16();
+          const coords: number[] = [];
+          for (let m = 0; m < 6; m++) {
+            coords.push(reader.readInt32());
           }
-          if (frameInfo.warning) {
-            parseWarnings.push(`Frame ${f}: ${frameInfo.warning}`);
+          if (boxType === ATTACK_BOX) {
+            hitBoxes.push({
+              shape: "rect",
+              frameStart: i,
+              frameEnd: i,
+              x1: coords[0]!, y1: coords[1]!, z1: coords[2]!,
+              x2: coords[3]!, y2: coords[4]!, z2: coords[5]!,
+            });
           }
         }
+
+        if (reader.remaining < 12) break;
+
+        // imgId, imgParam, x, y
+        reader.readUint16(); // imgId
+        reader.readUint16(); // imgParam
+        reader.readInt32();  // x offset
+        reader.readInt32();  // y offset
+
+        // Per-frame properties
+        if (reader.remaining < 2) break;
+        const propertyCount = reader.readUint16();
+        for (let m = 0; m < propertyCount; m++) {
+          if (reader.remaining < 2) break;
+          const propType = reader.readUint16();
+          AniAnalyzer.skipParamValue(reader, propType);
+        }
       }
+    } catch (e: unknown) {
+      parseWarnings.push(`Parse error: ${e instanceof Error ? e.message : String(e)}`);
     }
+
+    const imgPath = sprites.length > 0 ? sprites[0]! : "";
 
     return {
       imgPath,
-      totalFrames,
+      totalFrames: hitBoxes.length > 0 ? Math.max(...hitBoxes.map(h => h.frameEnd)) + 1 : 0,
       hitBoxes,
       rawSections,
       sourcePath,
@@ -143,218 +148,68 @@ export class AniAnalyzer {
     };
   }
 
-  /**
-   * Detect frame record size using version knowledge and data analysis.
-   *
-   * 1. If the version byte maps to a known record size AND the frame data
-   *    is evenly divisible by it, use it directly.
-   * 2. Otherwise, try fallback sizes, checking which produces sequential
-   *    frame indices across multiple records.
-   *
-   * @param data — raw frame data bytes
-   * @param version — .ani version byte (buf[0])
-   * @returns detected record size, or 0 if undetermined
-   */
-  private static detectRecordSize(data: Uint8Array, version: number): number {
-    if (data.length < 8) return 0;
-
-    // 1. Check version-specific known size first
-    const knownSize = VERSION_RECORD_SIZE[version];
-    if (knownSize && data.length % knownSize === 0) {
-      // Verify by checking frame indices are sequential
-      const recordCount = Math.floor(data.length / knownSize);
-      if (recordCount >= 2) {
-        let sequential = true;
-        for (let r = 1; r < Math.min(5, recordCount); r++) {
-          const prev = AniAnalyzer.readInt32LE(data, (r - 1) * knownSize);
-          const curr = AniAnalyzer.readInt32LE(data, r * knownSize);
-          if (curr !== prev + 1 && curr !== prev) {
-            sequential = false;
-            break;
-          }
-        }
-        if (sequential) return knownSize;
-      } else if (recordCount === 1) {
-        return knownSize; // single record — trust the known size
-      }
-    }
-
-    // 2. Fallback: try each candidate size
-    for (const size of FALLBACK_RECORD_SIZES) {
-      if (size === knownSize) continue; // already checked above
-      if (data.length < size * 2) continue;
-      if (data.length % size !== 0) continue;
-
-      let consistent = 0;
-      const total = Math.min(5, Math.floor(data.length / size));
-      for (let r = 1; r < total; r++) {
-        const prevFrame = AniAnalyzer.readInt32LE(data, (r - 1) * size);
-        const currFrame = AniAnalyzer.readInt32LE(data, r * size);
-        if (currFrame === prevFrame + 1 || currFrame === prevFrame) {
-          consistent++;
-        }
-      }
-      if (consistent >= Math.max(1, total - 2)) {
-        return size;
-      }
-    }
-
-    // 3. Absolute fallback: check divisibility
-    for (const size of FALLBACK_RECORD_SIZES) {
-      if (data.length % size === 0) return size;
-    }
-
-    return 0;
-  }
-
-  /** Read a little-endian int32 from a buffer at given offset */
-  private static readInt32LE(buf: Uint8Array, offset: number): number {
-    return (
-      (buf[offset]! | (buf[offset + 1]! << 8) | (buf[offset + 2]! << 16) | (buf[offset + 3]! << 24))
-    ) >>> 0;
-  }
-
-  /** Read a little-endian int16 from a buffer at given offset */
-  private static readInt16LE(buf: Uint8Array, offset: number): number {
-    const val = (buf[offset]! | (buf[offset + 1]! << 8));
-    return val > 0x7FFF ? val - 0x10000 : val;
-  }
-
-  /**
-   * Parse a single frame record, extracting hitbox data if present.
-   *
-   * Uses version-specific knowledge for record layout:
-   *   v3, v5, v9: coordinate data at known offsets as signed int16 pairs
-   *   Others: heuristic scanning for coordinate-like patterns
-   *
-   * @param record — raw frame record bytes
-   * @param recordSize — detected record size for this file
-   * @param frameIndex — sequential index in the parsed loop
-   * @param version — .ani version byte
-   */
-  private static parseFrameRecord(
-    record: Uint8Array,
-    recordSize: number,
-    frameIndex: number,
-    version: number,
-  ): { hitBox?: AniHitBox; warning?: string } {
-    if (recordSize < 4) return {};
-
-    // Read the stored frame index (usually first u32)
-    const storedFrameIndex = AniAnalyzer.readInt32LE(record, 0);
-
-    // Version-specific hitbox extraction
-    switch (version) {
-      case 3: // medium-135B, med2-157B — coords at offset 8-19 (6 s16 values)
-        if (recordSize >= 20) {
-          const coords: number[] = [];
-          for (let i = 0; i < 6; i++) {
-            coords.push(AniAnalyzer.readInt16LE(record, 8 + i * 2));
-          }
-          return AniAnalyzer.tryExtractHitbox(coords, storedFrameIndex);
+  private static skipParamValue(reader: ByteReader, type: number): void {
+    switch (type) {
+      case AniNodeType.LOOP:
+      case AniNodeType.SHADOW:
+      case AniNodeType.INTERPOLATION:
+        reader.readUint8();
+        break;
+      case AniNodeType.COORD:
+        reader.readUint16();
+        break;
+      case AniNodeType.IMAGE_RATE:
+        reader.readFloat32(); reader.readFloat32();
+        break;
+      case AniNodeType.IMAGE_ROTATE:
+        reader.readInt32();
+        break;
+      case AniNodeType.RGBA:
+        reader.readUint32();
+        break;
+      case AniNodeType.GRAPHIC_EFFECT: {
+        const itemType = reader.readUint16();
+        if (itemType === 5) { // MONOCHROME
+          reader.readUint8(); reader.readUint8(); reader.readUint8();
+        } else if (itemType === 6) { // SPACEDISTORT
+          reader.readUint16(); reader.readUint16();
         }
         break;
-
-      case 5: // large-197B — coords at offset 8-19
-        if (recordSize >= 20) {
-          const coords: number[] = [];
-          for (let i = 0; i < 6; i++) {
-            coords.push(AniAnalyzer.readInt16LE(record, 8 + i * 2));
-          }
-          return AniAnalyzer.tryExtractHitbox(coords, storedFrameIndex);
-        }
-        break;
-
-      case 9: // anims-309B — coords at offset 14-25
-        if (recordSize >= 26) {
-          const coords: number[] = [];
-          for (let i = 0; i < 6; i++) {
-            coords.push(AniAnalyzer.readInt16LE(record, 14 + i * 2));
-          }
-          return AniAnalyzer.tryExtractHitbox(coords, storedFrameIndex);
-        }
-        break;
-
-      case 15: // anims-669B — coords at offset 8-19 (s16)
-        if (recordSize >= 20) {
-          const coords: number[] = [];
-          for (let i = 0; i < 6; i++) {
-            coords.push(AniAnalyzer.readInt16LE(record, 8 + i * 2));
-          }
-          return AniAnalyzer.tryExtractHitbox(coords, storedFrameIndex);
-        }
-        break;
-
-      default: {
-        // Heuristic: scan record for coordinate-like patterns
-        // Try offsets 4, 8, 12 for 6 consecutive s16 values in range [-5000, 5000]
-        for (const off of [4, 8, 12, 14]) {
-          if (off + 12 > recordSize) continue;
-          const coords: number[] = [];
-          for (let i = 0; i < 6; i++) {
-            coords.push(AniAnalyzer.readInt16LE(record, off + i * 2));
-          }
-          const valid = coords.filter(c => c !== 0 && Math.abs(c) <= 5000).length >= 4;
-          if (valid) {
-            return AniAnalyzer.tryExtractHitbox(coords, storedFrameIndex);
-          }
-        }
-        return {};
       }
+      case AniNodeType.DELAY:
+        reader.readInt32();
+        break;
+      case AniNodeType.DAMAGE_TYPE:
+        reader.readUint16();
+        break;
+      case AniNodeType.PLAY_SOUND: {
+        const sLen = reader.readInt32();
+        if (sLen > 0 && sLen < reader.remaining) reader.readBytes(sLen);
+        break;
+      }
+      case AniNodeType.PRELOAD:
+        break;
+      case AniNodeType.SET_FLAG:
+        reader.readInt32();
+        break;
+      case AniNodeType.FLIP_TYPE:
+        reader.readUint16();
+        break;
+      case AniNodeType.LOOP_START:
+        break;
+      case AniNodeType.LOOP_END:
+        reader.readInt32();
+        break;
+      case AniNodeType.CLIP:
+        reader.readInt16(); reader.readInt16(); reader.readInt16(); reader.readInt16();
+        break;
+      default:
+        // Unknown types: types 2,4,5,6,14,15,18,19,20,21,22 have no extra data
+        break;
     }
-
-    return {};
   }
 
-  /**
-   * Try to extract hitbox coordinates from pre-parsed coordinate array.
-   * Returns undefined if the data doesn't look like a valid hitbox.
-   *
-   * @param coords — array of 6 int16 values (x1, y1, z1, x2, y2, z2)
-   * @param frameIndex — frame index to assign to the hitbox
-   */
-  private static tryExtractHitbox(
-    coords: number[],
-    frameIndex: number,
-  ): { hitBox?: AniHitBox; warning?: string } {
-    if (coords.length < 6) return {};
-
-    // Validate coordinates look reasonable for a hitbox
-    const nonZeroCount = coords.filter(c => c !== 0).length;
-    const allInRange = coords.every(c => Math.abs(c) <= 5000);
-
-    if (nonZeroCount >= 4 && allInRange) {
-      // This looks like a valid hitbox
-      return {
-        hitBox: {
-          shape: "rect",
-          frameStart: frameIndex,
-          frameEnd: frameIndex,
-          x1: coords[0]!,
-          y1: coords[1]!,
-          z1: coords[2]!,
-          x2: coords[3]!,
-          y2: coords[4]!,
-          z2: coords[5]!,
-        },
-      };
-    }
-
-    return { warning: `No valid hitbox pattern in coords: ${coords.join(",")}` };
-  }
-
-  /**
-   * Convenience method: extract a .ani file from a PVF container and parse it.
-   *
-   * @param pvfBuf — raw Script.pvf buffer
-   * @param container — parsed PvfContainer from PvfParser.parse()
-   * @param aniPath — exact .ani file path within the PVF
-   */
-  static extractAndParse(
-    pvfBuf: Buffer,
-    container: PvfContainer,
-    aniPath: string,
-  ): AniDef | undefined {
+  static extractAndParse(pvfBuf: Buffer, container: PvfContainer, aniPath: string): AniDef | undefined {
     const data = PvfParser.extractFile(pvfBuf, container, aniPath);
     if (!data) return undefined;
     return AniAnalyzer.parse(data, aniPath);
