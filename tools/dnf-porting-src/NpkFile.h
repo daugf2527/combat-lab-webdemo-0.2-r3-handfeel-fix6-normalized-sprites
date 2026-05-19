@@ -22,6 +22,7 @@ public:
 	static auto getNpkImgNode(const std::string& path, int32_t index) ->ImgNode&;
 
 	auto unpack() -> void;
+	inline auto isUnpacked() const { return !imgNodes.empty(); }
 
 
 	template <typename T>

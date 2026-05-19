@@ -8,7 +8,7 @@ struct ImgNode
 {
 	NpkTexture texture;
 
-	uint32_t format;	//目前已知的类型有 0x0E(1555格式) 0x0F(4444格式) 0x10(8888格式) 0x11(不包含任何数据，可能是指内容同上一帧)
+	uint32_t format;	//目前锟斤拷知锟斤拷锟斤拷锟斤拷锟斤拷 0x0E(1555锟斤拷式) 0x0F(4444锟斤拷式) 0x10(8888锟斤拷式) 0x11(锟斤拷锟斤拷锟斤拷锟轿猴拷锟斤拷锟捷ｏ拷锟斤拷锟斤拷锟斤拷指锟斤拷锟斤拷同锟斤拷一帧)
 	int32_t linkId;
 
 	struct {
@@ -44,6 +44,7 @@ public:
 	auto openColorBoard(std::vector<uint32_t>& color) -> void;
 	auto openMapImages(int32_t size) -> void;
 	inline auto getFileName() const -> std::string { return metaInfo.fileName; }
+	inline auto getNodeCount() const { return nodes.size(); }
 	auto expand() -> void;
 	inline auto& operator[](int32_t index) { assert(index < nodes.size() && index >= 0); return nodes[index]; }
 private:
