@@ -89,10 +89,18 @@ src/main.ts    — Phaser bootstrap (1920×1080, Scale.FIT).
 - Two-space indent in JSON. Compact TypeScript style.
 - Runtime assets in `public/assets/` referenced by string path.
 
+## Performance boundaries
+
+Prioritize fixes for: runtime FPS drops during active combat, heap/replay/event memory growth, input latency degradation, per-frame allocation/cloning/texture creation/unbounded archive growth.
+
+Acceptable as backlog: first-load texture decode/upload spikes (image decode, texImage2D, shader init), initial scene-construction spikes from Phaser Text/Graphics, normalized spritesheet decode cost (unless it blocks basic usability).
+
 ## DNF/DFO reference truth rule
 
 Priority: Neople Official API > DFO-specific wikis > local tuning baseline.
 Never commit `NEOPLE_API_KEY`. Frames/hitboxes/gravity/AI are NOT covered by API — use PVF extraction data.
+
+Open API and ordinary wiki pages do NOT cover: startup/active/recovery frames, hitbox/hurtbox geometry, launch/gravity curves, combo-protection thresholds, server authority, network sync. Wikipedia/general encyclopedias are background-only — never use them for combat numbers, frame data, hitboxes, damage formulas, skill scaling, AI behavior, or live balance values.
 
 ## Test infrastructure
 
@@ -126,3 +134,4 @@ Tests run via `scripts/static-test.mjs`: TS compiled with `tsconfig.test.json` �
 - Node built-ins (`node:fs` etc.) unavailable in test tsconfig — import data modules directly.
 - Negative `whiffCancelFrom` is intentional (means "can never whiff cancel").
 - RagingFury has 10 pillars in code (baseline doc says 8 — trust code).
+- Replay frames must only store that frame's newly flushed events — never clone the full archive (commit `c4d3b22` fixed an OOM caused by per-frame full-archive copies).
