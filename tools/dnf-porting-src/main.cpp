@@ -134,8 +134,12 @@ static void printErrorJson(const std::string& path, const std::string& error) {
 // NPK/IMG output formatters
 // ══════════════════════════════════════════════════════════════
 
-static void printImgFrameJson(ImgNode& node, int index, bool includeData) {
-    printf("{\"index\":%d", index);
+// Prints the fields of a single IMG frame as comma-separated JSON KV pairs,
+// without an enclosing { } pair and without a leading comma. Callers either
+// emit braces themselves (when treating it as a standalone object) or inline
+// the fields into an outer object.
+static void printImgFrameFields(ImgNode& node, int index, bool includeData) {
+    printf("\"index\":%d", index);
     printf(",\"isLink\":%s", node.isLink ? "true" : "false");
     if (node.isLink) {
         printf(",\"linkId\":%d", node.linkId);
@@ -164,7 +168,6 @@ static void printImgFrameJson(ImgNode& node, int index, bool includeData) {
             }
         }
     }
-    printf("}");
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -343,7 +346,7 @@ int main(int argc, char* argv[]) {
             if (frameIdx >= 0) {
                 auto& node = (*img)[frameIdx];
                 printf("{\"type\":\"frame\",\"img\":\"%s\",", escapeJson(imgName).c_str());
-                printImgFrameJson(node, frameIdx, withData);
+                printImgFrameFields(node, frameIdx, withData);
                 printf("}\n");
                 return 0;
             }
@@ -380,24 +383,59 @@ int main(int argc, char* argv[]) {
     if (!spritePath.empty() && !npkDir.empty()) {
         fprintf(stderr, "[LOG] Resolving sprite: %s frame=%d\n", spritePath.c_str(), frameIdx);
         NpkFile::loadAll(npkDir);
-        auto& node = NpkFile::getNpkImgNode(spritePath, frameIdx >= 0 ? frameIdx : 0);
-        printf("{\"type\":\"resolved_frame\",\"sprite\":\"%s\",\"frame\":%d,",
-            escapeJson(spritePath).c_str(), frameIdx >= 0 ? frameIdx : 0);
-        printImgFrameJson(node, frameIdx >= 0 ? frameIdx : 0, withData);
-        printf("}\n");
-        delete reader;
-        return 0;
+        int useFrame = frameIdx >= 0 ? frameIdx : 0;
+        try {
+            auto& node = NpkFile::getNpkImgNode(spritePath, useFrame);
+            printf("{\"type\":\"resolved_frame\",\"sprite\":\"%s\",\"frame\":%d,",
+                escapeJson(spritePath).c_str(), useFrame);
+            printImgFrameFields(node, useFrame, withData);
+            printf("}\n");
+            delete reader;
+            return 0;
+        } catch (const std::exception& e) {
+            printf("{\"type\":\"error\",\"sprite\":\"%s\",\"frame\":%d,\"error\":\"%s\"}\n",
+                escapeJson(spritePath).c_str(), useFrame, escapeJson(e.what()).c_str());
+            fprintf(stderr, "[ERROR] %s\n", e.what());
+            delete reader;
+            return 1;
+        }
     }
 
     // ── List mode ──
     if (listMode) {
-        printf("{\"type\":\"pvf_list\",\"files\":[");
-        // Traverse the tree - simplified: just output known paths
-        // PvfReader stores pvfNodes internally, not directly accessible
-        // We'll use the tree structure
         fprintf(stderr, "[LOG] List mode: traversing file tree...\n");
-        // For now output a count
-        printf("],\"note\":\"use --file to extract specific paths\"}\n");
+        printf("{\"type\":\"pvf_list\",\"files\":[");
+        int count = 0;
+        auto& root = reader->getRoot();
+
+        // DFS the tree. Path is built from segment names joined with '/'.
+        // Leaf = node with non-null PvfNode pointer.
+        // We use an iterative stack with (treeNode*, accumulatedPath).
+        std::vector<std::pair<PvfTreeNode*, std::string>> stack;
+        for (auto& kv : root.children) {
+            stack.emplace_back(kv.second.get(), kv.first);
+        }
+        while (!stack.empty()) {
+            auto [node, path] = stack.back();
+            stack.pop_back();
+            if (node->node != nullptr) {
+                // Leaf file. Apply substring filter if set.
+                if (filter.empty() || path.find(filter) != std::string::npos) {
+                    if (count > 0) printf(",");
+                    printf("\"%s\"", escapeJson(path).c_str());
+                    count++;
+                }
+            }
+            for (auto& kv : node->children) {
+                stack.emplace_back(kv.second.get(), path + "/" + kv.first);
+            }
+        }
+        printf("],\"count\":%d", count);
+        if (!filter.empty()) {
+            printf(",\"filter\":\"%s\"", escapeJson(filter).c_str());
+        }
+        printf("}\n");
+        fprintf(stderr, "[DONE] List: %d files. Memory released.\n", count);
         delete reader;
         return 0;
     }
@@ -510,7 +548,7 @@ int main(int argc, char* argv[]) {
                     auto& node = NpkFile::getNpkImgNode(sprite, fi);
                     printf("{\"type\":\"frame\",\"sprite\":\"%s\",\"frame\":%d,",
                         escapeJson(sprite).c_str(), fi);
-                    printImgFrameJson(node, fi, line.find("\"withData\"") != std::string::npos);
+                    printImgFrameFields(node, fi, line.find("\"withData\"") != std::string::npos);
                     printf("}\n---\n");
                 } catch (...) {
                     printErrorJson(sprite, "frame_not_found");

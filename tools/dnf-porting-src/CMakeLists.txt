@@ -16,6 +16,12 @@ if(WIN32)
         target_link_directories(dnf-extract PRIVATE ${MINGW_SYSROOT}/lib)
     endif()
     target_link_libraries(dnf-extract z iconv)
+
+    # Static-link libgcc/libstdc++/winpthread so the exe doesn't depend on
+    # external DLLs at runtime. Without this, running on a machine where
+    # /mingw64/bin/libstdc++-6.dll differs from the one we linked against
+    # corrupts stdio (stdout/stderr handles silently fail under redirection).
+    target_link_options(dnf-extract PRIVATE -static-libgcc -static-libstdc++ -static)
 else()
     # Linux: zlib via find_package, iconv is in glibc
     find_package(ZLIB REQUIRED)

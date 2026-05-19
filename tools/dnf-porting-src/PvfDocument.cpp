@@ -45,7 +45,7 @@ auto PvfDocument::unpack() -> void
 		
 		while (reader.getOffset() < len) 
 		{
-			auto type = reader.read<int8_t>(); //µ½×îºóÁË¾Í²»´¦ÀíÁË·ÀÖ¹ÄÚ´æÔ½½ç
+			auto type = reader.read<int8_t>(); //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¾Í²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë·ï¿½Ö¹ï¿½Ú´ï¿½Ô½ï¿½ï¿½
 
 			if (type >= 2 && type <= 10)
 			{
@@ -128,7 +128,7 @@ auto PvfDocument::unpack() -> void
 			}
 			else
 			{
-				std::cout << "Unknown type in pvf node £º" << (int32_t)type << std::endl;
+				std::cerr << "Unknown type in pvf node ï¿½ï¿½" << (int32_t)type << std::endl;
 			}
 		}
 	}

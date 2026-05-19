@@ -1,4 +1,5 @@
 #include <cstring>
+#include <stdexcept>
 
 #include "NpkFile.h"
 #include <cstdio>
@@ -7,6 +8,11 @@
 
 
 const char* HeaderFlag = "NeoplePack_Bill";
+
+// NPK basename (e.g. "sprite_character_swordman_atequipment_avatar_skin") → full
+// filesystem path. Populated by loadAll(); consulted by getNpkImgNode() to look
+// up the actual NPK file regardless of where the user pointed --npk-dir.
+static std::unordered_map<std::string, std::string> g_npkBasenameToPath;
 
 
 NpkFile::NpkFile(const std::string& initFile)
@@ -35,15 +41,13 @@ auto NpkFile::loadAll(const std::string& path) -> void
 		if (
 			PvfString::endWith(entry.path().string(), ".npk") ||
 			PvfString::endWith(entry.path().string(), ".NPK")
-			&& !isDir) 
+			&& !isDir)
 		{
-			std::string path = entry.path().string();
-		//	PvfString::toLower(path);
-
-			GlobalFileTable.emplace(
-				path,
-				path
-			);// .first->second.unpack();
+			std::string fullPath = entry.path().string();
+			std::string basename = entry.path().stem().string();
+			PvfString::toLower(basename);
+			g_npkBasenameToPath[basename] = fullPath;
+			GlobalFileTable.emplace(fullPath, fullPath);
 		}
 	}
 }
@@ -126,24 +130,55 @@ auto NpkFile::getNpkImgNode(const std::string& path, int32_t index) -> ImgNode&
 {
 	std::vector<std::string> outs;
 	PvfString::split(path, "/", outs);
-	std::string newStr = "ImagePacks2"+ delimiter +"sprite_";
-	std::string newStr2 = "sprite/";
-
-	for (auto i = 0;i<outs.size() - 1;i++)
-	{
-		newStr.append(outs[i]);
-		newStr.append("_");
-		newStr2.append(outs[i]);
-		newStr2.append("/");
+	if (outs.size() < 2) {
+		throw std::runtime_error("sprite path too short: " + path);
 	}
-	newStr = newStr.substr(0, newStr.size() - 1);
 
-	newStr.append(".NPK");
+	// PVF .ani files reference sprites like
+	//   character/swordman/equipment/avatar/skin/sm_body%04d.img
+	// but the NPK packaging uses different segment names on character/equipment
+	// directories. Apply a small list of known PVF→NPK directory renames before
+	// looking up the NPK file.
+	auto applyRenames = [](std::vector<std::string> segs) {
+		for (auto& seg : segs) {
+			if (seg == "equipment") seg = "atequipment";
+		}
+		return segs;
+	};
 
-	newStr2.append(outs[outs.size() - 1]);
-	auto node = GlobalTable[newStr2];
-	if (node == nullptr) {
-		GlobalFileTable.emplace(newStr, newStr).first->second.unpack();
+	std::vector<std::vector<std::string>> candidates;
+	auto renamed = applyRenames(outs);
+	candidates.push_back(renamed);
+	if (renamed != outs) candidates.push_back(outs);
+
+	for (auto& segs : candidates) {
+		// NPK file basename: "sprite_" + segments[0..N-1] joined by "_"
+		// (the last segment is the .img filename and stays out of the NPK name)
+		std::string npkBasename = "sprite";
+		for (size_t i = 0; i + 1 < segs.size(); i++) {
+			npkBasename += "_" + segs[i];
+		}
+		PvfString::toLower(npkBasename);
+
+		auto itPath = g_npkBasenameToPath.find(npkBasename);
+		if (itPath == g_npkBasenameToPath.end()) continue;
+
+		// Ensure the NPK is unpacked. unpack() populates GlobalTable with
+		// every IMG it contains, keyed by the full "sprite/.../<name>.img" path.
+		auto& slot = GlobalFileTable.emplace(itPath->second, itPath->second).first->second;
+		if (slot.imgNodes.empty()) {
+			slot.unpack();
+		}
+
+		// IMG key inside GlobalTable: "sprite/" + segs joined by "/"
+		std::string imgKey = "sprite";
+		for (auto& seg : segs) imgKey += "/" + seg;
+
+		auto itImg = GlobalTable.find(imgKey);
+		if (itImg != GlobalTable.end() && itImg->second != nullptr) {
+			return (*itImg->second)[index];
+		}
 	}
-	return (*GlobalTable[newStr2])[index];
+
+	throw std::runtime_error("sprite not found in any NPK: " + path);
 }

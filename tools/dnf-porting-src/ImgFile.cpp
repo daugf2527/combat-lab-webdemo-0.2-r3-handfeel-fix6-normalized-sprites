@@ -90,7 +90,7 @@ auto ImgFile::expand() -> void
 	header.version =	file->read<int32_t>();
 	header.indexCount = file->read<int32_t>();
 
-	printf(" %s : Version %d \n", metaInfo.fileName, header.version);
+	fprintf(stderr, " %s : Version %d \n", metaInfo.fileName, header.version);
 
 	switch (header.version) {
 	case 4:

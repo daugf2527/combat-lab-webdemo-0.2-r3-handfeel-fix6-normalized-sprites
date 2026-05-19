@@ -10,3 +10,10 @@ test-results/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# C++ tool build artifacts
+tools/dnf-porting-src/build/
+
+# Local scratch files
+.tmp-*
+*.stackdump
