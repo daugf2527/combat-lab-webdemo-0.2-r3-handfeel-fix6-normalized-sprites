@@ -17,6 +17,104 @@ type ActorSpriteRequest = {
   dead?: boolean;
 };
 
+// ── DNF .ani-driven action registry ──────────────────────────────────
+// Each action = N PNGs (one per .ani frame), loaded as individual Phaser
+// textures with `this.load.image()`. Per-frame delay drives tick→frame
+// lookup; per-frame anchor → offsetY so feet sit at the actor position.
+
+export type DnfFrameMeta = {
+  key: string;        // Phaser texture key for this frame
+  delay: number;      // ms until next frame
+  width: number;
+  height: number;
+  anchorX: number;    // feet anchor inside PNG (px, from origin top-left)
+  anchorY: number;
+};
+export type DnfActionMeta = {
+  name: string;
+  loop: boolean;
+  scale: number;
+  frames: DnfFrameMeta[];
+  totalDuration: number;
+  stableOffsetY: number; // median below-feet offset for loop anims, avoids per-frame jitter
+};
+type DnfMetaJson = {
+  source: { framesCount: number; loop: boolean };
+  frames: Array<{
+    width: number;
+    height: number;
+    aniOffset: { x: number; y: number };
+    imgAnchor: { x: number; y: number };
+    delay: number;
+  }>;
+};
+
+const DNF_ACTIONS: Record<string, DnfActionMeta> = {};
+const DEFAULT_DNF_SCALE = 2.5;
+const MS_PER_TICK = 1000 / 60;
+
+export function registerDnfAction(name: string, meta: DnfMetaJson, keyPrefix: string, scale = DEFAULT_DNF_SCALE): void {
+  const frames: DnfFrameMeta[] = meta.frames.map((f, idx) => ({
+    key: `${keyPrefix}_${String(idx).padStart(2, "0")}`,
+    delay: Math.max(1, f.delay),
+    width: f.width,
+    height: f.height,
+    anchorX: -f.aniOffset.x - f.imgAnchor.x,
+    anchorY: -f.aniOffset.y - f.imgAnchor.y,
+  }));
+  // Stable offsetY = median of (height - anchorY) clamped ≥ 0, scaled
+  const belowFeet = frames.map(f => Math.max(0, f.height - f.anchorY)).sort((a, b) => a - b);
+  const median = belowFeet[Math.floor(belowFeet.length / 2)]!;
+  DNF_ACTIONS[name] = {
+    name,
+    loop: meta.source.loop,
+    scale,
+    frames,
+    totalDuration: frames.reduce((s, f) => s + f.delay, 0),
+    stableOffsetY: median * scale,
+  };
+}
+
+export function getDnfAction(name: string): DnfActionMeta | undefined {
+  return DNF_ACTIONS[name];
+}
+
+function pickDnfSpriteSpec(action: DnfActionMeta, tick: number): SpriteSpec {
+  let ms = tick * MS_PER_TICK;
+  if (action.loop) ms = ((ms % action.totalDuration) + action.totalDuration) % action.totalDuration;
+  else if (ms > action.totalDuration) ms = action.totalDuration;
+  let idx = action.frames.length - 1;
+  let acc = 0;
+  for (let i = 0; i < action.frames.length; i++) {
+    acc += action.frames[i]!.delay;
+    if (ms < acc) { idx = i; break; }
+  }
+  const f = action.frames[idx]!;
+  return {
+    key: f.key,
+    frame: 0,
+    scale: action.scale,
+    offsetY: action.stableOffsetY,
+  };
+}
+
+function pickDnfActionSpec(action: DnfActionMeta, localFrame: number): SpriteSpec {
+  const ms = Math.max(0, localFrame - 1) * MS_PER_TICK;
+  let idx = action.frames.length - 1;
+  let acc = 0;
+  for (let i = 0; i < action.frames.length; i++) {
+    acc += action.frames[i]!.delay;
+    if (ms < acc) { idx = i; break; }
+  }
+  const f = action.frames[idx]!;
+  return {
+    key: f.key,
+    frame: 0,
+    scale: action.scale,
+    offsetY: Math.max(0, f.height - f.anchorY) * action.scale,
+  };
+}
+
 export const NORMALIZED_SPRITE_SHEETS: Record<string, { key: string; url: string; cellW: number; cellH: number }> = {
   player: { key: "player_berserker_norm", url: "assets/sprites/normalized/player_berserker_norm.png", cellW: 448, cellH: 432 },
   goblin: { key: "goblin_norm", url: "assets/sprites/normalized/goblin_norm.png", cellW: 672, cellH: 272 },
@@ -402,17 +500,73 @@ export function getCombatSpriteSpec(req: ActorSpriteRequest): SpriteSpec | null 
 
   if (req.id === "player") {
     const s = SHEETS.player;
-    if (req.dead || reaction === "dead") return spec(s, "death", req, "action", 8);
-    if (reaction === "downed") return spec(s, "knockdown", req, "loop", 12);
-    if (["light_stagger", "heavy_stagger", "knockback", "armor_feedback_only"].includes(reaction)) return spec(s, "hurt", req, "action", 2);
-    if (action === "UpwardSlash") return spec(s, "upward_slash", req, "action", 2);
-    if (action === "NormalBasic3" || action === "FrenzyBasic3" || action === "MountainousWheel" || action === "RagingFury") return spec(s, "attack3", req, "action", 2);
-    if (action === "NormalBasic2" || action === "FrenzyBasic2" || action === "DashAttack" || action === "JumpAttack" || action === "Bloodlust") return spec(s, "attack2", req, "action", 2);
-    if (action === "NormalBasic1" || action === "FrenzyBasic1") return spec(s, "attack1", req, "action", 2);
-    if (action === "Jump") return spec(s, "jump", req, "loop", 1);
-    if (action === "Backstep") return spec(s, "backstep", req, "action", 2);
-    if (req.locomotion === "run") return spec(s, "run", req, "loop", 5);
-    if (req.locomotion === "walk") return spec(s, "walk", req, "loop", 7);
+    const lf = req.localFrame ?? 0;
+
+    // Death/downed — DNF "down" is knockdown+lying; no separate death anim yet
+    if (req.dead || reaction === "dead") {
+      const dnf = DNF_ACTIONS["swordman_down"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "death", req, "action", 8);
+    }
+    if (reaction === "downed") {
+      const dnf = DNF_ACTIONS["swordman_down"];
+      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
+      return spec(s, "knockdown", req, "loop", 12);
+    }
+
+    // Hit reactions
+    if (["light_stagger", "heavy_stagger", "knockback", "armor_feedback_only"].includes(reaction)) {
+      const dnf = DNF_ACTIONS["swordman_hitback"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "hurt", req, "action", 2);
+    }
+
+    // Attacks
+    if (action === "UpwardSlash" || action === "NormalBasic3" || action === "FrenzyBasic3" || action === "MountainousWheel" || action === "RagingFury") {
+      const dnf = DNF_ACTIONS["swordman_attack3"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "attack3", req, "action", 2);
+    }
+    if (action === "NormalBasic2" || action === "FrenzyBasic2" || action === "DashAttack" || action === "JumpAttack" || action === "Bloodlust") {
+      const dnf = DNF_ACTIONS["swordman_attack2"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "attack2", req, "action", 2);
+    }
+    if (action === "NormalBasic1" || action === "FrenzyBasic1") {
+      const dnf = DNF_ACTIONS["swordman_attack1"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "attack1", req, "action", 2);
+    }
+
+    // Jump
+    if (action === "Jump") {
+      const dnf = DNF_ACTIONS["swordman_jump"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "jump", req, "loop", 1);
+    }
+
+    // Backstep — use damage2 as visual stand-in
+    if (action === "Backstep") {
+      const dnf = DNF_ACTIONS["swordman_damage2"];
+      if (dnf) return pickDnfActionSpec(dnf, lf);
+      return spec(s, "backstep", req, "action", 2);
+    }
+
+    // Locomotion
+    if (req.locomotion === "run") {
+      const dnf = DNF_ACTIONS["swordman_dash"];
+      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
+      return spec(s, "run", req, "loop", 5);
+    }
+    if (req.locomotion === "walk") {
+      const dnf = DNF_ACTIONS["swordman_dash"];
+      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
+      return spec(s, "walk", req, "loop", 7);
+    }
+
+    // Idle
+    const dnfStay = DNF_ACTIONS["swordman_stay"];
+    if (dnfStay) return pickDnfSpriteSpec(dnfStay, req.tick);
     return spec(s, "idle", req, "loop", 10);
   }
 

@@ -389,8 +389,10 @@ export class CombatScene extends Phaser.Scene {
     effect.lineStyle(whiff ? 4 : 7, 0xef4444, whiff ? 0.78 : 0.94);
     effect.beginPath();
     effect.moveTo(x - 66, y + 27);
-    effect.quadraticCurveTo(x - 27, y - 51, x + 15, y - 6);
-    effect.quadraticCurveTo(x + 48, y + 30, x + 87, y - 27);
+    effect.lineTo(x - 27, y - 51);
+    effect.lineTo(x + 15, y - 6);
+    effect.lineTo(x + 48, y + 30);
+    effect.lineTo(x + 87, y - 27);
     effect.strokePath();
     effect.lineStyle(3, 0xfca5a5, whiff ? 0.58 : 0.76);
     effect.beginPath();
@@ -434,8 +436,10 @@ export class CombatScene extends Phaser.Scene {
     effect.lineStyle(6, 0xdc2626, 0.88);
     effect.beginPath();
     effect.moveTo(x - 27, y + height);
-    effect.quadraticCurveTo(x - 12, y + 36, x, y);
-    effect.quadraticCurveTo(x + 18, y + 39, x + 27, y + height);
+    effect.lineTo(x - 12, y + 36);
+    effect.lineTo(x, y);
+    effect.lineTo(x + 18, y + 39);
+    effect.lineTo(x + 27, y + height);
     effect.strokePath();
     effect.lineStyle(3, 0xfca5a5, 0.72);
     effect.beginPath();
@@ -642,7 +646,9 @@ export class CombatScene extends Phaser.Scene {
   private setSpriteTextureIfChanged(sprite: Phaser.GameObjects.Image, key: string, frame: number): void {
     const currentKey = sprite.texture?.key;
     const currentFrame = (sprite.frame as any)?.name;
-    if (currentKey !== key || currentFrame !== frame) (sprite as any).setTexture(key, frame);
+    // Single-image textures have frame name "__BASE"; treat frame=0 as equivalent.
+    const sameFrame = currentFrame === frame || (frame === 0 && currentFrame === "__BASE");
+    if (currentKey !== key || !sameFrame) (sprite as any).setTexture(key, frame);
   }
 
   private setTintStateIfChanged(sprite: Phaser.GameObjects.Image, tinted: boolean): void {

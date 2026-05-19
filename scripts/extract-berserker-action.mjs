@@ -83,16 +83,29 @@ const out = {
 
 for (const f of ani.frames) {
   const spritePath = f.sprite.replace("%04d", costume);
-  const frameIdx = f.imgParam; // atlas internal index, NOT a file suffix
-  const resolved = dnfJson(
-    "--pvf", PVF,
-    "--npk-dir", NPK_DIR,
-    "--resolve", spritePath,
-    "--frame", String(frameIdx),
-    "--with-data",
-  );
-  if (resolved.type === "error") {
-    throw new Error(`frame ${f.i}: ${resolved.error}`);
+  let frameIdx = f.imgParam; // atlas internal index, NOT a file suffix
+
+  // Resolve, following link frames (up to 8 hops to avoid infinite loops)
+  let resolved;
+  for (let hop = 0; hop < 8; hop++) {
+    resolved = dnfJson(
+      "--pvf", PVF,
+      "--npk-dir", NPK_DIR,
+      "--resolve", spritePath,
+      "--frame", String(frameIdx),
+      "--with-data",
+    );
+    if (resolved.type === "error") {
+      throw new Error(`frame ${f.i}: ${resolved.error}`);
+    }
+    if (resolved.isLink) {
+      frameIdx = resolved.linkId;
+      continue;
+    }
+    break;
+  }
+  if (resolved.isLink) {
+    throw new Error(`frame ${f.i}: link chain too deep (last linkId=${resolved.linkId})`);
   }
   if (resolved.formatName !== "ARGB_8888") {
     throw new Error(`frame ${f.i}: unsupported pixel format ${resolved.formatName} (PoC only handles ARGB_8888)`);

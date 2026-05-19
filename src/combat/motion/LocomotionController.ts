@@ -8,7 +8,7 @@ export interface LocomotionControllerOptions {
 
 const defaultOptions: LocomotionControllerOptions = {
   walkSpeed: 2.75,
-  runSpeed: 4.55,
+  runSpeed: 8.5,
 };
 
 const freeMovementReactions = new Set(["none", "getting_up"]);

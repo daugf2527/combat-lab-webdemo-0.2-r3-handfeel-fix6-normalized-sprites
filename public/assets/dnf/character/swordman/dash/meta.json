@@ -1,0 +1,435 @@
+{
+  "action": "dash",
+  "source": {
+    "aniPath": "character/swordman/animation/dash.ani",
+    "framesCount": 8,
+    "loop": true,
+    "costume": "0000"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "file": "frame_00.png",
+      "width": 71,
+      "height": 99,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 208,
+        "y": 238
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          0,
+          -5,
+          2,
+          22,
+          10,
+          92
+        ],
+        [
+          20,
+          -4,
+          52,
+          20,
+          8,
+          43
+        ],
+        [
+          -21,
+          -4,
+          59,
+          20,
+          6,
+          20
+        ],
+        [
+          -15,
+          -5,
+          5,
+          20,
+          7,
+          23
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 105,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 105
+      }
+    },
+    {
+      "index": 1,
+      "file": "frame_01.png",
+      "width": 80,
+      "height": 92,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 193,
+        "y": 236
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          2,
+          -5,
+          0,
+          30,
+          10,
+          91
+        ],
+        [
+          -20,
+          -4,
+          25,
+          23,
+          8,
+          50
+        ],
+        [
+          -38,
+          -4,
+          4,
+          20,
+          7,
+          32
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 106,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 106
+      }
+    },
+    {
+      "index": 2,
+      "file": "frame_02.png",
+      "width": 100,
+      "height": 93,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 185,
+        "y": 237
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          8,
+          -5,
+          1,
+          22,
+          10,
+          94
+        ],
+        [
+          29,
+          -3,
+          4,
+          22,
+          7,
+          25
+        ],
+        [
+          -11,
+          -1,
+          37,
+          20,
+          7,
+          45
+        ],
+        [
+          -45,
+          0,
+          32,
+          35,
+          6,
+          17
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 107,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 107
+      }
+    },
+    {
+      "index": 3,
+      "file": "frame_03.png",
+      "width": 77,
+      "height": 97,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 196,
+        "y": 238
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          11,
+          -5,
+          0,
+          22,
+          10,
+          95
+        ],
+        [
+          -16,
+          -3,
+          29,
+          30,
+          6,
+          52
+        ],
+        [
+          -33,
+          -3,
+          24,
+          20,
+          7,
+          15
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 108,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 108
+      }
+    },
+    {
+      "index": 4,
+      "file": "frame_04.png",
+      "width": 74,
+      "height": 97,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 208,
+        "y": 238
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          -6,
+          -5,
+          0,
+          29,
+          10,
+          89
+        ],
+        [
+          23,
+          -4,
+          55,
+          14,
+          8,
+          39
+        ],
+        [
+          -23,
+          -4,
+          55,
+          20,
+          6,
+          20
+        ],
+        [
+          -20,
+          -5,
+          3,
+          20,
+          8,
+          24
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 109,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 109
+      }
+    },
+    {
+      "index": 5,
+      "file": "frame_05.png",
+      "width": 97,
+      "height": 93,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 196,
+        "y": 236
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          -3,
+          -5,
+          1,
+          30,
+          10,
+          88
+        ],
+        [
+          26,
+          -5,
+          53,
+          16,
+          8,
+          42
+        ],
+        [
+          -24,
+          -3,
+          9,
+          20,
+          8,
+          69
+        ],
+        [
+          -37,
+          -2,
+          11,
+          20,
+          6,
+          20
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 110,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 110
+      }
+    },
+    {
+      "index": 6,
+      "file": "frame_06.png",
+      "width": 99,
+      "height": 95,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 188,
+        "y": 237
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          13,
+          -5,
+          0,
+          30,
+          10,
+          92
+        ],
+        [
+          -17,
+          -3,
+          39,
+          31,
+          7,
+          45
+        ],
+        [
+          -43,
+          -2,
+          37,
+          29,
+          6,
+          13
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 111,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 111
+      }
+    },
+    {
+      "index": 7,
+      "file": "frame_07.png",
+      "width": 88,
+      "height": 99,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 198,
+        "y": 238
+      },
+      "delay": 100,
+      "damageBox": [
+        [
+          7,
+          -5,
+          1,
+          18,
+          10,
+          93
+        ],
+        [
+          26,
+          -4,
+          56,
+          20,
+          8,
+          37
+        ],
+        [
+          -15,
+          -4,
+          29,
+          23,
+          8,
+          55
+        ],
+        [
+          -33,
+          -3,
+          23,
+          20,
+          7,
+          20
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 112,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 112
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "action": "overturn",
+  "source": {
+    "aniPath": "character/swordman/animation/overturn.ani",
+    "framesCount": 1,
+    "loop": false,
+    "costume": "0000"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "file": "frame_00.png",
+      "width": 64,
+      "height": 102,
+      "aniOffset": {
+        "x": -226,
+        "y": -246
+      },
+      "imgAnchor": {
+        "x": 198,
+        "y": 240
+      },
+      "delay": 10000,
+      "damageBox": [
+        [
+          -14,
+          -5,
+          2,
+          30,
+          10,
+          84
+        ],
+        [
+          -28,
+          -4,
+          26,
+          17,
+          8,
+          59
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 97,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 96
+      }
+    }
+  ]
+}

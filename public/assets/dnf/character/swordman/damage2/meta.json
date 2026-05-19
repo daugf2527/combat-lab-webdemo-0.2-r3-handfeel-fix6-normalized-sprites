@@ -1,0 +1,51 @@
+{
+  "action": "damage2",
+  "source": {
+    "aniPath": "character/swordman/animation/damage2.ani",
+    "framesCount": 1,
+    "loop": false,
+    "costume": "0000"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "file": "frame_00.png",
+      "width": 70,
+      "height": 108,
+      "aniOffset": {
+        "x": -232,
+        "y": -333
+      },
+      "imgAnchor": {
+        "x": 202,
+        "y": 231
+      },
+      "delay": 10000,
+      "damageBox": [
+        [
+          -20,
+          -5,
+          -1,
+          20,
+          10,
+          101
+        ],
+        [
+          1,
+          -5,
+          0,
+          23,
+          9,
+          76
+        ]
+      ],
+      "attackBox": [],
+      "provenance": {
+        "imgId": 0,
+        "imgParam": 104,
+        "spritePath": "character/swordman/equipment/avatar/skin/sm_body0000.img",
+        "atlasFrameIndex": 104
+      }
+    }
+  ]
+}

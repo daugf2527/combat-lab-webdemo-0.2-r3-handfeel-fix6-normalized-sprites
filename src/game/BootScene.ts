@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { AudioUnlockGate } from "./audio/AudioUnlockGate.js";
-import { NORMALIZED_SPRITE_SHEETS } from "./SpriteFrameLibrary.js";
+import { NORMALIZED_SPRITE_SHEETS, registerDnfAction } from "./SpriteFrameLibrary.js";
 import { getRuntimeEvidenceCollector } from "../runtime/evidence/RuntimeEvidenceCollector.js";
 import { initializeActionManifestForRuntime } from "./bootActionManifest.js";
 
@@ -33,6 +33,30 @@ export class BootScene extends Phaser.Scene {
         frameWidth: sheet.cellW,
         frameHeight: sheet.cellH,
       });
+    }
+
+    // DNF swordman actions — individual PNGs + meta.json per action
+    const DNF_ACTIONS_MANIFEST: Array<{ name: string; frameCount: number }> = [
+      { name: "stay", frameCount: 6 },
+      { name: "dash", frameCount: 8 },
+      { name: "jump", frameCount: 16 },
+      { name: "damage1", frameCount: 1 },
+      { name: "damage2", frameCount: 1 },
+      { name: "hitback", frameCount: 9 },
+      { name: "down", frameCount: 6 },
+      { name: "overturn", frameCount: 1 },
+      { name: "attack1", frameCount: 10 },
+      { name: "attack2", frameCount: 11 },
+      { name: "attack3", frameCount: 9 },
+    ];
+    const DNF_BASE_DIR = "assets/dnf/character/swordman";
+    for (const { name, frameCount } of DNF_ACTIONS_MANIFEST) {
+      const prefix = `dnf_swordman_${name}`;
+      for (let i = 0; i < frameCount; i++) {
+        const idx = String(i).padStart(2, "0");
+        this.load.image(`${prefix}_${idx}`, `${DNF_BASE_DIR}/${name}/frame_${idx}.png`);
+      }
+      this.load.json(`${prefix}_meta`, `${DNF_BASE_DIR}/${name}/meta.json`);
     }
   }
 
@@ -89,6 +113,12 @@ export class BootScene extends Phaser.Scene {
       } catch (error) {
         showBootError(error);
         throw error;
+      }
+      // Register all DNF swordman actions from loaded meta.json
+      const dnfActions = ["stay", "dash", "jump", "damage1", "damage2", "hitback", "down", "overturn", "attack1", "attack2", "attack3"];
+      for (const name of dnfActions) {
+        const meta = this.cache.json.get(`dnf_swordman_${name}_meta`);
+        if (meta) registerDnfAction(`swordman_${name}`, meta, `dnf_swordman_${name}`);
       }
       this.game.registry.set("audioGate", this.audioGate);
       this.scene.start("combat");
