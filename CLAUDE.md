@@ -31,6 +31,7 @@ src/data/manifest/
 ├── actions/default.json      ← 38 actions (sourceProvenance metadata attached)
 ├── damage/classic-profile.json ← formula constants (8/8 community-audit verified)
 ├── status/default.json       ← 14 status profiles (Rupture fixed: 3-stack 5/7/8% per Batch B)
+├── status/pve-profile.json   ← PvE-specific status tuning
 ├── ai/enemy-default.json     ← 5 enemy types + DNF AI params + CRT-004 hit-reaction timers
 ├── ai/boss-patterns.json     ← boss phase/pattern config
 ├── schema.ts / hash.ts / loader.ts ← validation + sourceProvenance, FNV-1a hashing (strips metadata), async loading
@@ -50,7 +51,7 @@ src/data/manifest/
 
 ```
 npm run typecheck   → passed
-npm run static:test → 40/40 passed
+npm run static:test → 41/41 passed
 npm run build       → passed
 ```
 
@@ -175,7 +176,7 @@ Known constraints:
 
 ## Automation test infrastructure
 
-The test suite runs via `scripts/static-test.mjs`: TypeScript is compiled with `tsconfig.test.json` into `.tmp/test-js/`, then each `.test.js` file under `tests/static/` is executed as a standalone Node child process. Tests pass by exiting 0 and fail by exiting non-zero or throwing. There is no test framework (no Vitest, Jest, Mocha). Assertions use `node:assert/strict` via `tests/static/test-utils.ts`, which re-exports `ok`, `equal`, and `deepEqual` only. All 40 test files live in `tests/static/*.test.ts`.
+The test suite runs via `scripts/static-test.mjs`: TypeScript is compiled with `tsconfig.test.json` into `.tmp/test-js/`, then each `.test.js` file under `tests/static/` is executed as a standalone Node child process. Tests pass by exiting 0 and fail by exiting non-zero or throwing. There is no test framework (no Vitest, Jest, Mocha). Assertions use `node:assert/strict` via `tests/static/test-utils.ts`, which re-exports `ok`, `equal`, and `deepEqual` only. All 41 test files live in `tests/static/*.test.ts`.
 
 Browser smoke tests use Playwright (`tests/browser/combat-smoke.spec.ts`, run via `npm run browser:smoke`). These require a dev server running and a display — they are not part of the CI-static verification gates.
 

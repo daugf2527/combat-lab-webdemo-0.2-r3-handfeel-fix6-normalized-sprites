@@ -51,3 +51,24 @@ export interface EnemyManifest {
   sourcePolicyVersion: string;
   profiles: Record<EnemyManifestId, EnemyRuntimeProfile>;
 }
+
+export interface BossPattern {
+  name: string;
+  weight: number;
+  cooldownFrames: number;
+  damageMultiplier: number;
+}
+
+export interface BossPhase {
+  phase: number;
+  triggerHpPercent: number;
+  enterPattern: string;
+  patterns: BossPattern[];
+}
+
+export interface BossConfig {
+  id: string;
+  name: string;
+  maxHp: number;
+  phases: BossPhase[];
+}

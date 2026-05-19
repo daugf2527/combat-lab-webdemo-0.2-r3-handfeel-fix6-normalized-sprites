@@ -1,6 +1,5 @@
 import type { EnemyAIState } from "../../combat/ai/EnemyAIState.js";
-import type { BossConfig } from "../../combat/ai/EnemyAI.js";
-import type { EnemyManifest, EnemyManifestId, EnemyRuntimeProfile } from "./aiTypes.js";
+import type { EnemyManifest, EnemyManifestId, EnemyRuntimeProfile, BossConfig } from "./aiTypes.js";
 import enemyManifestJson from "./ai/enemy-default.json" with { type: "json" };
 import bossPatternsJson from "./ai/boss-patterns.json" with { type: "json" };
 

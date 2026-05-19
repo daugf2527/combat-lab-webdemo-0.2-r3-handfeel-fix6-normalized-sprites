@@ -57,26 +57,7 @@ function getHitReactionDuration(state: EnemyAIState, phase: "flinched" | "launch
   }
 }
 
-export interface BossPattern {
-  name: string;
-  weight: number;
-  cooldownFrames: number;
-  damageMultiplier: number;
-}
-
-export interface BossPhase {
-  phase: number;
-  triggerHpPercent: number;
-  enterPattern: string;
-  patterns: BossPattern[];
-}
-
-export interface BossConfig {
-  id: string;
-  name: string;
-  maxHp: number;
-  phases: BossPhase[];
-}
+import type { BossConfig, BossPattern } from "../../data/manifest/aiTypes.js";
 
 // ============================================================
 // DNF 70-85 classic monster AI: FSM + behavior tree hybrid
