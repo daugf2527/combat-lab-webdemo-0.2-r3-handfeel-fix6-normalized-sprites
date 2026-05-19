@@ -8,7 +8,7 @@ import { CameraController } from "./CameraController.js";
 import { bindCameraFeedbackHandlers } from "./CameraFeedbackHandlers.js";
 import { AudioUnlockGate } from "./audio/AudioUnlockGate.js";
 import { DebugLayer } from "./layers/DebugLayer.js";
-import { getCombatSpriteSpec, type SpriteSpec } from "./SpriteFrameLibrary.js";
+import { getCombatSpriteSpec, _debugLastPlayerSprite, type SpriteSpec } from "./SpriteFrameLibrary.js";
 import { getRuntimeEvidenceCollector, recordKernelCombatEvidence } from "../runtime/evidence/RuntimeEvidenceCollector.js";
 import { TouchControls } from "./TouchControls.js";
 
@@ -64,6 +64,7 @@ export class CombatScene extends Phaser.Scene {
   private hudText: Phaser.GameObjects.Text | null = null;
   private slowMotionActive = false;
   private debugOverlayVisible = false;
+  private dnfDebugText: Phaser.GameObjects.Text | null = null;
   // F1: FPS regression tracking
   private fpsSamples: number[] = [];
   private lowFpsStartTime = 0;
@@ -138,6 +139,7 @@ export class CombatScene extends Phaser.Scene {
     }
 
     this.refresh();
+    this.updateDnfDebugOverlay();
   }
 
   runScenario(): void {
@@ -858,4 +860,51 @@ export class CombatScene extends Phaser.Scene {
     if (runtime.combatLab?.scene === this) runtime.combatLab.scene = undefined;
     if (runtime.combatLab?.kernel === this.kernel) runtime.combatLab.kernel = undefined;
   };
+
+  private updateDnfDebugOverlay(): void {
+    const d = _debugLastPlayerSprite;
+    if (!this.dnfDebugText) {
+      this.dnfDebugText = this.add.text(10, 10, "", {
+        fontFamily: "monospace", fontSize: "13px", color: "#a5f3fc",
+        backgroundColor: "#0f172a80", padding: { x: 6, y: 4 },
+      }).setScrollFactor(0).setDepth(999);
+      this.createDnfTestButtons();
+    }
+    const lines = [
+      `action: ${d.action || "-"}  reaction: ${d.reaction || "none"}`,
+      `locomotion: ${d.locomotion || "idle"}  tick: ${d.tick}`,
+      `dnf: ${d.dnfAction}  frame: ${d.frameKey}`,
+    ];
+    this.dnfDebugText.setText(lines);
+  }
+
+  private createDnfTestButtons(): void {
+    const actions: Array<{ label: string; fn: () => void }> = [
+      { label: "Stay", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "Idle" as any, "debug"); } },
+      { label: "Walk→", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "Walk" as any, "debug", "right"); } },
+      { label: "Run→", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "Run" as any, "debug", "right"); } },
+      { label: "Atk1", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "NormalBasic1" as any, "debug"); } },
+      { label: "Atk2", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "NormalBasic2" as any, "debug"); } },
+      { label: "Atk3", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "NormalBasic3" as any, "debug"); } },
+      { label: "Jump", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "Jump" as any, "debug"); } },
+      { label: "Backstep", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "Backstep" as any, "debug"); } },
+      { label: "UpSlash", fn: () => { this.kernel.requestAction(this.kernel.actors[0]!, "UpwardSlash" as any, "debug"); } },
+      { label: "Hit", fn: () => { const p = this.kernel.actors[0]!; p.reactionState = "light_stagger" as any; p.handfeel.reactionRemaining = 20; } },
+      { label: "Down", fn: () => { const p = this.kernel.actors[0]!; p.reactionState = "downed" as any; p.handfeel.downRemaining = 60; } },
+    ];
+    const startX = 10;
+    const y = 70;
+    let x = startX;
+    for (const { label, fn } of actions) {
+      const w = label.length * 9 + 16;
+      const btn = this.add.rectangle(x + w / 2, y, w, 24, 0x1e3a5f)
+        .setScrollFactor(0).setDepth(999).setStrokeStyle(1, 0x38bdf8)
+        .setInteractive({ useHandCursor: true });
+      this.add.text(x + 8, y - 7, label, {
+        fontFamily: "monospace", fontSize: "12px", color: "#e0f2fe",
+      }).setScrollFactor(0).setDepth(999);
+      btn.on("pointerup", fn);
+      x += w + 6;
+    }
+  }
 }

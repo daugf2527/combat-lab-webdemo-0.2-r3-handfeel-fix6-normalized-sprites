@@ -79,6 +79,8 @@ export function getDnfAction(name: string): DnfActionMeta | undefined {
   return DNF_ACTIONS[name];
 }
 
+export let _debugLastPlayerSprite = { action: "", reaction: "", locomotion: "", dnfAction: "", frameKey: "", tick: 0 };
+
 function pickDnfSpriteSpec(action: DnfActionMeta, tick: number): SpriteSpec {
   let ms = tick * MS_PER_TICK;
   if (action.loop) ms = ((ms % action.totalDuration) + action.totalDuration) % action.totalDuration;
@@ -501,72 +503,77 @@ export function getCombatSpriteSpec(req: ActorSpriteRequest): SpriteSpec | null 
   if (req.id === "player") {
     const s = SHEETS.player;
     const lf = req.localFrame ?? 0;
+    const dbg = (dnfName: string, result: SpriteSpec): SpriteSpec => {
+      _debugLastPlayerSprite = { action: action ?? "", reaction, locomotion: req.locomotion ?? "", dnfAction: dnfName, frameKey: result.key, tick: req.tick };
+      return result;
+    };
 
     // Death/downed — DNF "down" is knockdown+lying; no separate death anim yet
     if (req.dead || reaction === "dead") {
       const dnf = DNF_ACTIONS["swordman_down"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "death", req, "action", 8);
+      if (dnf) return dbg("swordman_down", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:death", spec(s, "death", req, "action", 8));
     }
     if (reaction === "downed") {
       const dnf = DNF_ACTIONS["swordman_down"];
-      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
-      return spec(s, "knockdown", req, "loop", 12);
+      if (dnf) return dbg("swordman_down", pickDnfSpriteSpec(dnf, req.tick));
+      return dbg("fallback:knockdown", spec(s, "knockdown", req, "loop", 12));
     }
 
     // Hit reactions
     if (["light_stagger", "heavy_stagger", "knockback", "armor_feedback_only"].includes(reaction)) {
       const dnf = DNF_ACTIONS["swordman_hitback"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "hurt", req, "action", 2);
+      if (dnf) return dbg("swordman_hitback", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:hurt", spec(s, "hurt", req, "action", 2));
     }
 
     // Attacks
     if (action === "UpwardSlash" || action === "NormalBasic3" || action === "FrenzyBasic3" || action === "MountainousWheel" || action === "RagingFury") {
       const dnf = DNF_ACTIONS["swordman_attack3"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "attack3", req, "action", 2);
+      if (dnf) return dbg("swordman_attack3", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:attack3", spec(s, "attack3", req, "action", 2));
     }
     if (action === "NormalBasic2" || action === "FrenzyBasic2" || action === "DashAttack" || action === "JumpAttack" || action === "Bloodlust") {
       const dnf = DNF_ACTIONS["swordman_attack2"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "attack2", req, "action", 2);
+      if (dnf) return dbg("swordman_attack2", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:attack2", spec(s, "attack2", req, "action", 2));
     }
     if (action === "NormalBasic1" || action === "FrenzyBasic1") {
       const dnf = DNF_ACTIONS["swordman_attack1"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "attack1", req, "action", 2);
+      if (dnf) return dbg("swordman_attack1", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:attack1", spec(s, "attack1", req, "action", 2));
     }
 
     // Jump
     if (action === "Jump") {
       const dnf = DNF_ACTIONS["swordman_jump"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "jump", req, "loop", 1);
+      if (dnf) return dbg("swordman_jump", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:jump", spec(s, "jump", req, "loop", 1));
     }
 
     // Backstep — use damage2 as visual stand-in
     if (action === "Backstep") {
       const dnf = DNF_ACTIONS["swordman_damage2"];
-      if (dnf) return pickDnfActionSpec(dnf, lf);
-      return spec(s, "backstep", req, "action", 2);
+      if (dnf) return dbg("swordman_damage2", pickDnfActionSpec(dnf, lf));
+      return dbg("fallback:backstep", spec(s, "backstep", req, "action", 2));
     }
 
     // Locomotion
     if (req.locomotion === "run") {
       const dnf = DNF_ACTIONS["swordman_dash"];
-      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
-      return spec(s, "run", req, "loop", 5);
+      if (dnf) return dbg("swordman_dash", pickDnfSpriteSpec(dnf, req.tick));
+      return dbg("fallback:run", spec(s, "run", req, "loop", 5));
     }
     if (req.locomotion === "walk") {
       const dnf = DNF_ACTIONS["swordman_dash"];
-      if (dnf) return pickDnfSpriteSpec(dnf, req.tick);
-      return spec(s, "walk", req, "loop", 7);
+      if (dnf) return dbg("swordman_dash", pickDnfSpriteSpec(dnf, req.tick));
+      return dbg("fallback:walk", spec(s, "walk", req, "loop", 7));
     }
 
     // Idle
     const dnfStay = DNF_ACTIONS["swordman_stay"];
-    if (dnfStay) return pickDnfSpriteSpec(dnfStay, req.tick);
+    if (dnfStay) return dbg("swordman_stay", pickDnfSpriteSpec(dnfStay, req.tick));
+    return dbg("fallback:idle", spec(s, "idle", req, "loop", 10));
     return spec(s, "idle", req, "loop", 10);
   }
 
