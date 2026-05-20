@@ -334,8 +334,8 @@ test("combat scene boots, runs deterministic scenario, and validates all combat 
 
   mkdirSync(verificationDir, { recursive: true });
 
-  // Setup
-  await page.goto("/", { waitUntil: "domcontentloaded", timeout: 20000 });
+  // Setup — use ?scene=combat deep link to bypass scene selector
+  await page.goto("/?scene=combat", { waitUntil: "domcontentloaded", timeout: 20000 });
   results.push({ check: "page_loaded", passed: true });
 
   await expect(page.locator("canvas")).toBeVisible({ timeout: 15000 });
@@ -345,32 +345,27 @@ test("combat scene boots, runs deterministic scenario, and validates all combat 
   const bootErrors: string[] = [];
   page.on("pageerror", err => bootErrors.push(err.message));
 
-  // Phaser BootScene: press Enter or click "Start Training Ground" button
-  await page.keyboard.press("Enter");
+  // BootScene auto-starts CombatScene via ?scene=combat deep link.
+  // Wait for the kernel-ready signal set by CombatScene.create().
   let booted = false;
   try {
-    await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { polling: 200, timeout: 25000 });
+    await page.waitForFunction(
+      () => Boolean((window as any).combatLab?.kernelReady),
+      undefined,
+      { polling: 200, timeout: 30000 },
+    );
     booted = true;
   } catch {
-    // Retry: click the start button directly
-    const btn = page.locator("text=Start Training Ground").first();
-    if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await btn.click().catch(() => undefined);
-    }
-    try {
-      await page.waitForFunction(() => Boolean((window as any).combatLab?.scene && (window as any).combatLab?.kernel), undefined, { polling: 200, timeout: 25000 });
-      booted = true;
-    } catch {
-      booted = false;
-    }
+    booted = false;
   }
   results.push({ check: "combat_scene_ready", passed: booted, bootErrors });
   if (!booted) {
-    // Dump page state for debugging
+    const pageErrors: string[] = [];
+    page.on("console", msg => { if (msg.type() === "error") pageErrors.push(msg.text()); });
     const bodyText = await page.evaluate(() => (document.body as any)?.innerText?.substring(0, 500) ?? "(no body text)");
     console.log(`[SMOKE] Boot failed. Page text: ${bodyText}`);
-    console.log(`[SMOKE] Boot page errors: ${bootErrors.join(' | ')}`);
-    // Don't throw here — let the test continue and fail gracefully at the end
+    console.log(`[SMOKE] Boot errors: ${bootErrors.join(' | ') || '(none)'}`);
+    console.log(`[SMOKE] Console errors: ${pageErrors.join(' | ') || '(none)'}`);
   }
 
   const sceneBooted = booted; // from the boot check above

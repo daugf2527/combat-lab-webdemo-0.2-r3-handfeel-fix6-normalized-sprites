@@ -3,6 +3,7 @@ import { AudioUnlockGate } from "./audio/AudioUnlockGate.js";
 import { NORMALIZED_SPRITE_SHEETS, registerDnfAction } from "./SpriteFrameLibrary.js";
 import { getRuntimeEvidenceCollector } from "../runtime/evidence/RuntimeEvidenceCollector.js";
 import { initializeActionManifestForRuntime } from "./bootActionManifest.js";
+import { SCENE_REGISTRY } from "./sceneRegistry.js";
 
 export class BootScene extends Phaser.Scene {
   private readonly audioGate = new AudioUnlockGate();
@@ -82,6 +83,16 @@ export class BootScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     this.cameras.main.setBackgroundColor("#0d0e12");
 
+    const directScene = this.game.registry.get("directScene") as string | undefined;
+    const validScene = directScene != null
+      ? SCENE_REGISTRY.find(e => e.key === directScene)?.key
+      : undefined;
+
+    if (validScene) {
+      this.startCombat(validScene);
+      return;
+    }
+
     this.add.text(width / 2, height / 2 - 96, "碳影", {
       fontFamily: '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", serif',
       fontSize: "72px",
@@ -136,26 +147,38 @@ export class BootScene extends Phaser.Scene {
       errorText.setText(`Action manifest failed to load:\n${message}`);
     };
 
-    const startCombat = async (): Promise<void> => {
-      await this.audioGate.unlock().catch(() => undefined);
+    const doStart = async (): Promise<void> => {
       try {
-        await initializeActionManifestForRuntime();
+        await this.startCombat(undefined);
       } catch (error) {
         showBootError(error);
-        throw error;
       }
-      const dnfActions = ["stay", "dash", "jump", "damage1", "damage2", "hitback", "down", "overturn", "attack1", "attack2", "attack3"];
-      for (const name of dnfActions) {
-        const meta = this.cache.json.get(`dnf_swordman_${name}_meta`);
-        if (meta) registerDnfAction(`swordman_${name}`, meta, `dnf_swordman_${name}`);
-      }
-      this.game.registry.set("audioGate", this.audioGate);
-      this.scene.start("scene-select");
     };
 
-    button.on("pointerup", () => void startCombat());
-    label.on("pointerup", () => void startCombat());
-    this.input.keyboard?.once("keydown-ENTER", () => void startCombat());
-    this.input.keyboard?.once("keydown-SPACE", () => void startCombat());
+    button.on("pointerup", () => void doStart());
+    label.on("pointerup", () => void doStart());
+    this.input.keyboard?.once("keydown-ENTER", () => void doStart());
+    this.input.keyboard?.once("keydown-SPACE", () => void doStart());
+  }
+
+  private async startCombat(directSceneKey?: string): Promise<void> {
+    await this.audioGate.unlock().catch(() => undefined);
+    try {
+      await initializeActionManifestForRuntime();
+    } catch (error) {
+      throw error;
+    }
+    const dnfActions = ["stay", "dash", "jump", "damage1", "damage2", "hitback", "down", "overturn", "attack1", "attack2", "attack3"];
+    for (const name of dnfActions) {
+      const meta = this.cache.json.get(`dnf_swordman_${name}_meta`);
+      if (meta) registerDnfAction(`swordman_${name}`, meta, `dnf_swordman_${name}`);
+    }
+    this.game.registry.set("audioGate", this.audioGate);
+
+    if (directSceneKey) {
+      this.scene.start(directSceneKey);
+    } else {
+      this.scene.start("scene-select");
+    }
   }
 }

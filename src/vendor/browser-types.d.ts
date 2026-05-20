@@ -1,4 +1,4 @@
-declare const window: { addEventListener(type:string, handler:(event:any)=>void):void; combatLab?: unknown; };
+declare const window: { addEventListener(type:string, handler:(event:any)=>void):void; combatLab?: unknown; location: { search: string; href: string; }; };
 declare const document: { body: HTMLElement; hidden: boolean; getElementById(id:string): HTMLElement | null; createElement(tag:"canvas"): HTMLCanvasElement; createElement(tag:string): HTMLElement; addEventListener(type:string, handler:(event:any)=>void):void; };
 declare const console: { log(...args: unknown[]): void; };
 declare const performance: { now(): number };
