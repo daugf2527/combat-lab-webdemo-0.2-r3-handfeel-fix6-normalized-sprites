@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { BootScene } from "./game/BootScene.js";
 import { CombatScene } from "./game/CombatScene.js";
+import { EquipmentTestScene } from "./game/EquipmentTestScene.js";
 
 type CombatLabRuntime = { scene?: CombatScene; kernel?: CombatScene["kernel"]; evidence?: Record<string, unknown> };
 
@@ -19,7 +20,7 @@ const game = new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, CombatScene],
+  scene: [BootScene, CombatScene, EquipmentTestScene],
   render: { antialias: false, pixelArt: true },
   fps: { target: 60, forceSetTimeOut: false },
 });

@@ -50,13 +50,29 @@ export class BootScene extends Phaser.Scene {
       { name: "attack3", frameCount: 9 },
     ];
     const DNF_BASE_DIR = "assets/dnf/character/swordman";
+    const DNF_EQUIPMENT_LAYERS = ["coat_a", "hair_a", "pants_a", "shoes_a"];
+
     for (const { name, frameCount } of DNF_ACTIONS_MANIFEST) {
       const prefix = `dnf_swordman_${name}`;
+      // Load body frames
       for (let i = 0; i < frameCount; i++) {
         const idx = String(i).padStart(2, "0");
         this.load.image(`${prefix}_${idx}`, `${DNF_BASE_DIR}/${name}/frame_${idx}.png`);
       }
       this.load.json(`${prefix}_meta`, `${DNF_BASE_DIR}/${name}/meta.json`);
+
+      // Load equipment layer frames (only for stay action for now)
+      if (name === "stay") {
+        for (const layer of DNF_EQUIPMENT_LAYERS) {
+          const layerDir = `${DNF_BASE_DIR}/${name}/${layer}`;
+          // Check if layer-meta.json exists by trying to load it
+          this.load.json(`${prefix}_${layer}_meta`, `${layerDir}/layer-meta.json`);
+          for (let i = 0; i < frameCount; i++) {
+            const idx = String(i).padStart(2, "0");
+            this.load.image(`${prefix}_${layer}_${idx}`, `${layerDir}/frame_${idx}.png`);
+          }
+        }
+      }
     }
   }
 
@@ -121,7 +137,7 @@ export class BootScene extends Phaser.Scene {
         if (meta) registerDnfAction(`swordman_${name}`, meta, `dnf_swordman_${name}`);
       }
       this.game.registry.set("audioGate", this.audioGate);
-      this.scene.start("combat");
+      this.scene.start("equipment-test");
     };
 
     button.on("pointerup", () => void startCombat());
