@@ -80,7 +80,7 @@ npm run build       → passed
 ### dnf-extract (C++ CLI)
 
 Source: `tools/dnf-porting-src/` — builds via CMake + MinGW/GCC.
-Binary: `tools/dnf-extract.exe` (Windows pre-built).
+Binary: `tools/dnf-extract` (Linux) / `tools/dnf-extract.exe` (Windows). Build locally with `cmake -S tools/dnf-porting-src -B tools/dnf-porting-src/build && cmake --build tools/dnf-porting-src/build`.
 CI: `.github/workflows/build-dnf-extract.yml` builds Windows/Linux-x64/Linux-arm64.
 
 **PVF modes** (Script.pvf extraction):
