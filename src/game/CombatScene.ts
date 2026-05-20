@@ -474,11 +474,10 @@ export class CombatScene extends Phaser.Scene {
         this.actorViews.set(actor.id, view);
       }
 
-      const model = this.kernel.actors.find(candidate => candidate.id === actor.id);
-      const maxHp = model?.resources.maxHp ?? Math.max(actor.hp, 1);
+      const maxHp = actor.maxHp ?? Math.max(actor.hp, 1);
       const hpRatio = Phaser.Math.Clamp(actor.hp / maxHp, 0, 1);
       const baseY = this.groundLineY + actor.pos.z - actor.pos.y;
-      const frenzy = model?.buffs.some(buff => buff.type === "frenzy") ?? false;
+      const frenzy = actor.buffs?.some(buff => (buff.type ?? buff) === "frenzy") ?? false;
       const isPlayer = actor.id === "player";
       const isBoss = actor.id === "boss";
       const isBuilding = actor.id === "building";
@@ -501,20 +500,20 @@ export class CombatScene extends Phaser.Scene {
       const hpY = isBoss ? -204 : isPlayer ? -168 : isImp ? -159 : -132;
       const labelY = hpY - 27;
       const stateY = hpY + 27;
-      const facing = actor.lockedFacing ?? actor.facing ?? model?.facing ?? "right";
+      const facing = actor.lockedFacing ?? actor.facing ?? "right";
       const facingSign = facing === "left" ? -1 : 1;
-      const hitFlash = (actor.hitFlashRemaining ?? model?.handfeel.hitFlashRemaining ?? 0) > 0;
+      const hitFlash = (actor.hitFlashRemaining ?? 0) > 0;
       const visibleBodyColor = hitFlash ? 0xffffff : bodyColor;
       const visibleHeadColor = hitFlash ? 0xffffff : headColor;
 
-      const recoilFrames = model?.handfeel.visualRecoilRemaining ?? actor.visualRecoilRemaining ?? 0;
+      const recoilFrames = actor.visualRecoilRemaining ?? 0;
       const recoilT = recoilFrames > 0 ? Math.min(1, recoilFrames / 6) : 0;
-      const visualRecoilX = (model?.handfeel.visualRecoilX ?? actor.visualRecoilX ?? 0) * recoilT;
-      const visualRecoilZ = (model?.handfeel.visualRecoilZ ?? actor.visualRecoilZ ?? 0) * recoilT;
+      const visualRecoilX = (actor.visualRecoilX ?? 0) * recoilT;
+      const visualRecoilZ = (actor.visualRecoilZ ?? 0) * recoilT;
       view.container.setPosition(actor.pos.x + visualRecoilX, baseY + visualRecoilZ);
       view.container.setDepth(Math.round(baseY));
       view.container.alpha = actor.dead ? 0.64 : 1;
-      const spriteSpec = this.spriteSpecFor(actor, model);
+      const spriteSpec = this.spriteSpecFor(actor);
       const usingSprite = spriteSpec !== null;
       const hurtTilt = actor.reaction === "light_stagger" || actor.reaction === "heavy_stagger" || actor.reaction === "knockback";
       const launched = actor.reaction === "launch" || actor.reaction === "air_hitstun" || actor.reaction === "falling";
@@ -582,10 +581,10 @@ export class CombatScene extends Phaser.Scene {
         const action = getAction(actor.action as Parameters<typeof getAction>[0]);
         const isAttackAction = ["NormalBasic1", "NormalBasic2", "NormalBasic3", "DashAttack", "JumpAttack", "FrenzyBasic1", "FrenzyBasic2", "FrenzyBasic3", "UpwardSlash", "MountainousWheel", "RagingFury", "Bloodlust"].includes(actor.action);
         if (isAttackAction) {
-          const localFrame = model?.currentAction?.localFrame ?? 0;
+          const localFrame = actor.localFrame ?? 0;
           const active = action.active.some(box => localFrame >= box.start && localFrame <= box.end);
           const frenzyColor = frenzy ? 0xef4444 : 0xd1d5db;
-          const attackFacing = model?.currentAction?.lockedFacing ?? facing;
+          const attackFacing = actor.lockedFacing ?? facing;
           const facingSign = attackFacing === "left" ? -1 : 1;
           const arcRadius = actor.action === "RagingFury" ? 138 : actor.action === "UpwardSlash" ? 105 : actor.action === "NormalBasic3" ? 108 : actor.action === "NormalBasic2" ? 93 : 78;
           const bladeY = actor.action === "UpwardSlash" ? -90 : -66;
@@ -719,24 +718,24 @@ export class CombatScene extends Phaser.Scene {
   }
 
 
-  private spriteSpecFor(actor: ActorSnapshot, model?: any): SpriteSpec | null {
+  private spriteSpecFor(actor: ActorSnapshot): SpriteSpec | null {
     return getCombatSpriteSpec({
       id: actor.id,
-      action: actor.action ?? model?.currentAction?.actionName ?? null,
+      action: actor.action ?? null,
       reaction: actor.reaction,
       locomotion: actor.locomotion,
       tick: this.kernel.tickCount,
-      localFrame: model?.currentAction?.localFrame ?? 0,
+      localFrame: actor.localFrame ?? 0,
       dead: actor.dead,
     });
   }
 
   private syncHudOverlay(snapshot: DebugSnapshot): void {
     if (!this.hudGraphics || !this.hudText) return;
-    const player = this.kernel.player;
-    const maxHp = player.resources.maxHp || 1;
-    const hpRatio = Phaser.Math.Clamp(player.resources.hp / maxHp, 0, 1);
-    const frenzy = player.buffs.find(buff => buff.type === "frenzy");
+    const playerSnap = (snapshot.actors as ActorSnapshot[]).find(a => a.id === "player");
+    const maxHp = playerSnap?.maxHp || 1;
+    const hpRatio = Phaser.Math.Clamp((playerSnap?.hp ?? 0) / maxHp, 0, 1);
+    const frenzy = playerSnap?.buffs?.find(buff => (buff.type ?? buff) === "frenzy");
     const frenzyRatio = frenzy ? Phaser.Math.Clamp((frenzy.expiresAtTick ?? snapshot.tick) - snapshot.tick, 0, 180) / 180 : 0;
 
     this.hudGraphics.clear();
@@ -754,7 +753,7 @@ export class CombatScene extends Phaser.Scene {
     this.hudGraphics.fillRect(36, 78, 270 * frenzyRatio, 12);
 
     this.setTextIfChanged(this.hudText, [
-      `HP ${player.resources.hp}/${maxHp}`,
+      `HP ${playerSnap?.hp ?? 0}/${maxHp}`,
       `Frenzy ${frenzy ? Math.max(0, frenzy.expiresAtTick - snapshot.tick) : 0}`,
       `FPS ${(this.game.loop.actualFps ?? 0).toFixed(1)}  LastHit ${snapshot.lastHit.actionName ?? "-"} ${snapshot.lastHit.finalReaction ?? ""}`,
     ]);
@@ -769,7 +768,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.setTextIfChanged(this.debugText, [
       `Tick: ${snapshot.tick} | Events: ${snapshot.eventCount} | Actors: ${snapshot.performance.actorCount}`,
-      `Player: ${player ? `${player.action ?? "Idle"} @ x=${player.pos.x.toFixed(1)} facing=${this.kernel.player.facing}` : "missing"}`,
+      `Player: ${player ? `${player.action ?? "Idle"} @ x=${player.pos.x.toFixed(1)} facing=${player.facing ?? "?"}` : "missing"}`,
       `LastHit: ${snapshot.lastHit.actionName ?? "-"} ${snapshot.lastHit.finalReaction ?? ""} dmg=${snapshot.lastHit.finalDamage ?? 0}`,
       `Scenario: ${scenario}`,
       `TickCost: ${(snapshot.performance.tickCostMs ?? 0).toFixed(1)}ms | Pool: ${snapshot.performance.poolStatus}`,

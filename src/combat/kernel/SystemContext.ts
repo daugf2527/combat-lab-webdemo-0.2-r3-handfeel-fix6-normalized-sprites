@@ -2,8 +2,7 @@
 // Systems read prior systems' output from ctx; they never call each other directly.
 // The kernel owns and mutates ctx; systems receive it as a parameter.
 
-import type { CombatEventBus } from "../events/CombatEventBus.js";
-import type { Actor } from "../types.js";
+import type { Actor, HitDecision } from "../types.js";
 import type { BrowserInputState, InputBuffer, CommandInputParser } from "../input/BrowserInputState.js";
 import type { SOCDCleaner } from "../input/SOCDCleaner.js";
 import type { RunCommandDetector } from "../input/RunCommandDetector.js";
@@ -80,4 +79,7 @@ export interface SystemContext {
   // ── Replay ──
   readonly replay: ReplayRecorder;
   readonly enableReplay: boolean;
+
+  // ── Bloodlust grab delegation ──
+  startBloodlustGrab(attacker: Actor, target: Actor, decision: HitDecision, correlationId: string): void;
 }

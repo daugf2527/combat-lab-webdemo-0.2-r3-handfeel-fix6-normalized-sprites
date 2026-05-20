@@ -1,71 +1,7 @@
 import type { Actor, Buff, BuffType } from "../types.js";
 import { CombatEventBus, CombatEventPriority } from "../events/CombatEventBus.js";
 import { nextId } from "../util/ids.js";
-
-const BLOODY_CROSS_LEVEL1 = {
-  skillAttackMultiplier: 1.287,
-  baseAttackSpeedPercent: 5.5,
-  baseMoveSpeedPercent: 5.5,
-  stages: [
-    { hpPercentAtOrBelow: 0.70, attackSpeedPercent: 11.2, moveSpeedPercent: 11.2, evasionPercent: 0.5 },
-    { hpPercentAtOrBelow: 0.60, attackSpeedPercent: 11.6, moveSpeedPercent: 11.6, evasionPercent: 2.7 },
-    { hpPercentAtOrBelow: 0.50, attackSpeedPercent: 12.0, moveSpeedPercent: 12.0, evasionPercent: 4.5 },
-  ],
-} as const;
-
-const DERANGE_LEVEL1 = {
-  skillAttackMultiplier: 1.34,
-  moveSpeedPercent: 21,
-  attackSpeedPercent: 21,
-  abnormalResistancePercent: 100,
-  hitRecoveryPercent: 105,
-  hitstunIncreasePercent: 5,
-  recoilReductionPercent: 5,
-  intelligenceDecrease: 1000,
-  physicalDefenseDecreasePercent: 50,
-  magicalDefenseDecreasePercent: 50,
-} as const;
-
-const DIEHARD_LEVEL1 = {
-  hpThresholdPercent: 0.50,
-  hpRecoveryPercent: 0.20,
-  physicalDefense: 8382,
-  magicalDefense: 8382,
-  hitRecovery: 373,
-  durationFrames: Math.round(31 * 60),
-} as const;
-
-const THIRST_LEVEL1 = {
-  skillAttackPercent: 20,
-  critChancePercent: 10,
-  hpDrainPercentPerTick: 0.3,
-  durationFrames: Math.round(30 * 60),
-} as const;
-
-const BLOOD_MEMORY_LEVEL1 = {
-  strengthPercent: 15,
-  attackSpeedPercent: 10,
-  moveSpeedPercent: 10,
-  castSpeedPercent: 10,
-  incomingDamageReductionPercent: 15,
-  durationFrames: Math.round(20 * 60),
-} as const;
-
-const VIM_AND_VIGOR_LEVEL1 = {
-  bleedDotDamage: 14,
-  bleedTickInterval: 30,
-  bleedDuration: 420,
-  maxHpPercent: 5,
-  moveSpeedPercent: 3,
-} as const;
-
-const frenzyModifiers = [
-  { key: "hp_activation_cost_percent", value: 0.02 },
-  { key: "hp_upkeep_percent_per_second", value: 0.005 },
-  { key: "berserker_skill_attack", value: 1.10 },
-  { key: "berserker_cooldown_reduction", value: 0.10 },
-  { key: "hit_recovery_received_stun_multiplier", value: 0.80 },
-];
+import { BUFF_PROFILES } from "../../data/manifest/buffs.js";
 
 export class BuffLifecycleSystem {
   apply(actor: Actor, type: BuffType, tick: number, bus: CombatEventBus, duration?: number): Buff {
@@ -90,7 +26,7 @@ export class BuffLifecycleSystem {
       if (tick % 60 === 0 && actor.resources.hp > 1) { actor.resources.hp = Math.max(1, actor.resources.hp - Math.max(1, Math.floor(actor.resources.maxHp * 0.005))); bus.emit("BuffTicked", CombatEventPriority.Buff, tick, {actorId:actor.id, type:"frenzy", hp:actor.resources.hp}, {targetActorId:actor.id}); }
     }
     if (actor.buffs.some(b=>b.type==="thirst")) {
-      if (tick % 60 === 0 && actor.resources.hp > 1) { const drain = Math.max(1, Math.floor(actor.resources.maxHp * THIRST_LEVEL1.hpDrainPercentPerTick / 100)); actor.resources.hp = Math.max(1, actor.resources.hp - drain); bus.emit("BuffTicked", CombatEventPriority.Buff, tick, {actorId:actor.id, type:"thirst", hp:actor.resources.hp}, {targetActorId:actor.id}); }
+      if (tick % 60 === 0 && actor.resources.hp > 1) { const drain = Math.max(1, Math.floor(actor.resources.maxHp * BUFF_PROFILES.thirst.hpDrainPercentPerTick / 100)); actor.resources.hp = Math.max(1, actor.resources.hp - drain); bus.emit("BuffTicked", CombatEventPriority.Buff, tick, {actorId:actor.id, type:"thirst", hp:actor.resources.hp}, {targetActorId:actor.id}); }
     }
     if (actor.faction === "player") this.syncBloodyCross(actor, tick, bus);
     for (const b of [...actor.buffs]) if (b.expiresAtTick !== undefined && b.expiresAtTick <= tick) { actor.buffs = actor.buffs.filter(x=>x.id!==b.id); bus.emit("BuffExpired", CombatEventPriority.Buff, tick, {actorId:actor.id, type:b.type}, {targetActorId:actor.id}); }
@@ -102,15 +38,15 @@ export class BuffLifecycleSystem {
   }
 
   canApplyDiehard(actor: Actor): boolean {
-    return actor.resources.hp <= actor.resources.maxHp * DIEHARD_LEVEL1.hpThresholdPercent;
+    return actor.resources.hp <= actor.resources.maxHp * BUFF_PROFILES.diehard.hpThresholdPercent;
   }
 
   applyDiehard(actor: Actor, tick: number, bus: CombatEventBus): Buff {
     const hpBefore = actor.resources.hp;
-    const recovered = Math.max(1, Math.floor(actor.resources.maxHp * DIEHARD_LEVEL1.hpRecoveryPercent));
+    const recovered = Math.max(1, Math.floor(actor.resources.maxHp * BUFF_PROFILES.diehard.hpRecoveryPercent));
     actor.resources.hp = Math.min(actor.resources.maxHp, actor.resources.hp + recovered);
     bus.emit("BuffTicked", CombatEventPriority.Buff, tick, {actorId:actor.id, type:"diehard", reason:"hp_recovery", recovered:actor.resources.hp-hpBefore, hp:actor.resources.hp}, {targetActorId:actor.id});
-    return this.apply(actor, "diehard", tick, bus, DIEHARD_LEVEL1.durationFrames);
+    return this.apply(actor, "diehard", tick, bus, BUFF_PROFILES.diehard.durationFrames);
   }
 
   private payFrenzyActivationCost(actor: Actor, tick: number, bus: CombatEventBus, buff: Buff): void {
@@ -139,23 +75,24 @@ export class BuffLifecycleSystem {
   }
 
   private bloodyCrossStage(hpRatio: number): number {
-    if (hpRatio <= BLOODY_CROSS_LEVEL1.stages[2].hpPercentAtOrBelow) return 3;
-    if (hpRatio <= BLOODY_CROSS_LEVEL1.stages[1].hpPercentAtOrBelow) return 2;
-    if (hpRatio <= BLOODY_CROSS_LEVEL1.stages[0].hpPercentAtOrBelow) return 1;
+    if (hpRatio <= BUFF_PROFILES.bloody_cross.stages[2].hpPercentAtOrBelow) return 3;
+    if (hpRatio <= BUFF_PROFILES.bloody_cross.stages[1].hpPercentAtOrBelow) return 2;
+    if (hpRatio <= BUFF_PROFILES.bloody_cross.stages[0].hpPercentAtOrBelow) return 1;
     return 0;
   }
 
   private modifiersFor(type: BuffType, bloodyCrossStage: number): Array<{key:string; value:number}> {
-    if (type === "frenzy") return frenzyModifiers.map(modifier => ({ ...modifier }));
+    if (type === "frenzy") return BUFF_PROFILES.frenzy.modifiers.map(modifier => ({ ...modifier }));
     if (type === "bloody_cross") {
+      const bc = BUFF_PROFILES.bloody_cross;
       const modifiers = [
-        { key: "bloody_cross_skill_attack", value: BLOODY_CROSS_LEVEL1.skillAttackMultiplier },
-        { key: "bloody_cross_base_attack_speed_percent", value: BLOODY_CROSS_LEVEL1.baseAttackSpeedPercent },
-        { key: "bloody_cross_base_move_speed_percent", value: BLOODY_CROSS_LEVEL1.baseMoveSpeedPercent },
+        { key: "bloody_cross_skill_attack", value: bc.skillAttackMultiplier },
+        { key: "bloody_cross_base_attack_speed_percent", value: bc.baseAttackSpeedPercent },
+        { key: "bloody_cross_base_move_speed_percent", value: bc.baseMoveSpeedPercent },
         { key: "bloody_cross_stage", value: bloodyCrossStage },
       ];
       if (bloodyCrossStage > 0) {
-        const stage = BLOODY_CROSS_LEVEL1.stages[bloodyCrossStage - 1]!;
+        const stage = bc.stages[bloodyCrossStage - 1]!;
         modifiers.push(
           { key: "bloody_cross_hp_threshold_percent", value: stage.hpPercentAtOrBelow * 100 },
           { key: "bloody_cross_attack_speed_percent", value: stage.attackSpeedPercent },
@@ -165,47 +102,62 @@ export class BuffLifecycleSystem {
       }
       return modifiers;
     }
-    if (type === "derange") return [
-      { key: "derange_skill_attack", value: DERANGE_LEVEL1.skillAttackMultiplier },
-      { key: "derange_move_speed_percent", value: DERANGE_LEVEL1.moveSpeedPercent },
-      { key: "derange_attack_speed_percent", value: DERANGE_LEVEL1.attackSpeedPercent },
-      { key: "derange_abnormal_resistance_percent", value: DERANGE_LEVEL1.abnormalResistancePercent },
-      { key: "derange_hit_recovery_percent", value: DERANGE_LEVEL1.hitRecoveryPercent },
-      { key: "derange_hitstun_increase_percent", value: DERANGE_LEVEL1.hitstunIncreasePercent },
-      { key: "derange_recoil_reduction_percent", value: DERANGE_LEVEL1.recoilReductionPercent },
-      { key: "derange_intelligence_decrease", value: DERANGE_LEVEL1.intelligenceDecrease },
-      { key: "derange_physical_defense_decrease_percent", value: DERANGE_LEVEL1.physicalDefenseDecreasePercent },
-      { key: "derange_magical_defense_decrease_percent", value: DERANGE_LEVEL1.magicalDefenseDecreasePercent },
-    ];
-    if (type === "diehard") return [
-      { key: "diehard_hp_threshold_percent", value: DIEHARD_LEVEL1.hpThresholdPercent * 100 },
-      { key: "diehard_hp_recovery_percent", value: DIEHARD_LEVEL1.hpRecoveryPercent * 100 },
-      { key: "diehard_physical_defense", value: DIEHARD_LEVEL1.physicalDefense },
-      { key: "diehard_magical_defense", value: DIEHARD_LEVEL1.magicalDefense },
-      { key: "diehard_hit_recovery", value: DIEHARD_LEVEL1.hitRecovery },
-      { key: "diehard_duration_frames", value: DIEHARD_LEVEL1.durationFrames },
-    ];
-    if (type === "thirst") return [
-      { key: "thirst_skill_attack_percent", value: THIRST_LEVEL1.skillAttackPercent },
-      { key: "thirst_crit_chance_percent", value: THIRST_LEVEL1.critChancePercent },
-      { key: "thirst_hp_drain_percent_per_tick", value: THIRST_LEVEL1.hpDrainPercentPerTick },
-      { key: "thirst_duration_frames", value: THIRST_LEVEL1.durationFrames },
-    ];
-    if (type === "blood_memory") return [
-      { key: "blood_memory_strength_percent", value: BLOOD_MEMORY_LEVEL1.strengthPercent },
-      { key: "blood_memory_attack_speed_percent", value: BLOOD_MEMORY_LEVEL1.attackSpeedPercent },
-      { key: "blood_memory_move_speed_percent", value: BLOOD_MEMORY_LEVEL1.moveSpeedPercent },
-      { key: "blood_memory_cast_speed_percent", value: BLOOD_MEMORY_LEVEL1.castSpeedPercent },
-      { key: "blood_memory_incoming_damage_reduction_percent", value: BLOOD_MEMORY_LEVEL1.incomingDamageReductionPercent },
-      { key: "blood_memory_duration_frames", value: BLOOD_MEMORY_LEVEL1.durationFrames },
-    ];
-    if (type === "vim_and_vigor") return [
-      { key: "vim_and_vigor_bleed_dot_damage", value: VIM_AND_VIGOR_LEVEL1.bleedDotDamage },
-      { key: "vim_and_vigor_bleed_tick_interval", value: VIM_AND_VIGOR_LEVEL1.bleedTickInterval },
-      { key: "vim_and_vigor_bleed_duration", value: VIM_AND_VIGOR_LEVEL1.bleedDuration },
-      { key: "vim_and_vigor_max_hp_percent", value: VIM_AND_VIGOR_LEVEL1.maxHpPercent },
-      { key: "vim_and_vigor_move_speed_percent", value: VIM_AND_VIGOR_LEVEL1.moveSpeedPercent },
-    ];
+    if (type === "derange") {
+      const d = BUFF_PROFILES.derange;
+      return [
+        { key: "derange_skill_attack", value: d.skillAttackMultiplier },
+        { key: "derange_move_speed_percent", value: d.moveSpeedPercent },
+        { key: "derange_attack_speed_percent", value: d.attackSpeedPercent },
+        { key: "derange_abnormal_resistance_percent", value: d.abnormalResistancePercent },
+        { key: "derange_hit_recovery_percent", value: d.hitRecoveryPercent },
+        { key: "derange_hitstun_increase_percent", value: d.hitstunIncreasePercent },
+        { key: "derange_recoil_reduction_percent", value: d.recoilReductionPercent },
+        { key: "derange_intelligence_decrease", value: d.intelligenceDecrease },
+        { key: "derange_physical_defense_decrease_percent", value: d.physicalDefenseDecreasePercent },
+        { key: "derange_magical_defense_decrease_percent", value: d.magicalDefenseDecreasePercent },
+      ];
+    }
+    if (type === "diehard") {
+      const dh = BUFF_PROFILES.diehard;
+      return [
+        { key: "diehard_hp_threshold_percent", value: dh.hpThresholdPercent * 100 },
+        { key: "diehard_hp_recovery_percent", value: dh.hpRecoveryPercent * 100 },
+        { key: "diehard_physical_defense", value: dh.physicalDefense },
+        { key: "diehard_magical_defense", value: dh.magicalDefense },
+        { key: "diehard_hit_recovery", value: dh.hitRecovery },
+        { key: "diehard_duration_frames", value: dh.durationFrames },
+      ];
+    }
+    if (type === "thirst") {
+      const t = BUFF_PROFILES.thirst;
+      return [
+        { key: "thirst_skill_attack_percent", value: t.skillAttackPercent },
+        { key: "thirst_crit_chance_percent", value: t.critChancePercent },
+        { key: "thirst_hp_drain_percent_per_tick", value: t.hpDrainPercentPerTick },
+        { key: "thirst_duration_frames", value: t.durationFrames },
+      ];
+    }
+    if (type === "blood_memory") {
+      const bm = BUFF_PROFILES.blood_memory;
+      return [
+        { key: "blood_memory_strength_percent", value: bm.strengthPercent },
+        { key: "blood_memory_attack_speed_percent", value: bm.attackSpeedPercent },
+        { key: "blood_memory_move_speed_percent", value: bm.moveSpeedPercent },
+        { key: "blood_memory_cast_speed_percent", value: bm.castSpeedPercent },
+        { key: "blood_memory_incoming_damage_reduction_percent", value: bm.incomingDamageReductionPercent },
+        { key: "blood_memory_duration_frames", value: bm.durationFrames },
+      ];
+    }
+    if (type === "vim_and_vigor") {
+      const vv = BUFF_PROFILES.vim_and_vigor;
+      return [
+        { key: "vim_and_vigor_bleed_dot_damage", value: vv.bleedDotDamage },
+        { key: "vim_and_vigor_bleed_tick_interval", value: vv.bleedTickInterval },
+        { key: "vim_and_vigor_bleed_duration", value: vv.bleedDuration },
+        { key: "vim_and_vigor_max_hp_percent", value: vv.maxHpPercent },
+        { key: "vim_and_vigor_move_speed_percent", value: vv.moveSpeedPercent },
+      ];
+    }
     return [];
   }
 }

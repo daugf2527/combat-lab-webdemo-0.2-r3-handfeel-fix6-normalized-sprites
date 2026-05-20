@@ -1,0 +1,67 @@
+{
+  "manifestVersion": "buff-manifest-v1",
+  "sourcePolicyVersion": "source-policy-v1",
+  "targetVersion": "70-85",
+  "profiles": {
+    "bloody_cross": {
+      "skillAttackMultiplier": 1.287,
+      "baseAttackSpeedPercent": 5.5,
+      "baseMoveSpeedPercent": 5.5,
+      "stages": [
+        { "hpPercentAtOrBelow": 0.70, "attackSpeedPercent": 11.2, "moveSpeedPercent": 11.2, "evasionPercent": 0.5 },
+        { "hpPercentAtOrBelow": 0.60, "attackSpeedPercent": 11.6, "moveSpeedPercent": 11.6, "evasionPercent": 2.7 },
+        { "hpPercentAtOrBelow": 0.50, "attackSpeedPercent": 12.0, "moveSpeedPercent": 12.0, "evasionPercent": 4.5 }
+      ]
+    },
+    "derange": {
+      "skillAttackMultiplier": 1.34,
+      "moveSpeedPercent": 21,
+      "attackSpeedPercent": 21,
+      "abnormalResistancePercent": 100,
+      "hitRecoveryPercent": 105,
+      "hitstunIncreasePercent": 5,
+      "recoilReductionPercent": 5,
+      "intelligenceDecrease": 1000,
+      "physicalDefenseDecreasePercent": 50,
+      "magicalDefenseDecreasePercent": 50
+    },
+    "diehard": {
+      "hpThresholdPercent": 0.50,
+      "hpRecoveryPercent": 0.20,
+      "physicalDefense": 8382,
+      "magicalDefense": 8382,
+      "hitRecovery": 373,
+      "durationFrames": 1860
+    },
+    "thirst": {
+      "skillAttackPercent": 20,
+      "critChancePercent": 10,
+      "hpDrainPercentPerTick": 0.3,
+      "durationFrames": 1800
+    },
+    "blood_memory": {
+      "strengthPercent": 15,
+      "attackSpeedPercent": 10,
+      "moveSpeedPercent": 10,
+      "castSpeedPercent": 10,
+      "incomingDamageReductionPercent": 15,
+      "durationFrames": 1200
+    },
+    "vim_and_vigor": {
+      "bleedDotDamage": 14,
+      "bleedTickInterval": 30,
+      "bleedDuration": 420,
+      "maxHpPercent": 5,
+      "moveSpeedPercent": 3
+    },
+    "frenzy": {
+      "modifiers": [
+        { "key": "hp_activation_cost_percent", "value": 0.02 },
+        { "key": "hp_upkeep_percent_per_second", "value": 0.005 },
+        { "key": "berserker_skill_attack", "value": 1.10 },
+        { "key": "berserker_cooldown_reduction", "value": 0.10 },
+        { "key": "hit_recovery_received_stun_multiplier", "value": 0.80 }
+      ]
+    }
+  }
+}

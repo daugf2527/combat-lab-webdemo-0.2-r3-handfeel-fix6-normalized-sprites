@@ -26,9 +26,10 @@ import { DebugOverlay, type DebugSnapshot } from "../debug/DebugOverlay.js";
 import { ReplayRecorder } from "../replay/ReplayRecorder.js";
 import { EnemyAIController } from "../ai/EnemyAI.js";
 import { BOSS_CONFIGS } from "../../data/manifest/ai.js";
-import { DEFAULT_COMBO_CORRECTION_CONFIG, applyComboCorrectionFromHit, hasComboCorrectionPressure, resetComboCorrectionState } from "../combo/ComboCorrection.js";
-import type { CombatSystem, SystemPhase } from "./CombatSystem.js";
-import type { SystemContext } from "./SystemContext.js";
+import { DEFAULT_COMBO_CORRECTION_CONFIG, hasComboCorrectionPressure, resetComboCorrectionState } from "../combo/ComboCorrection.js";
+import type { CombatSystem } from "./CombatSystem.js";
+import { ReactionMotionSystem } from "../reaction/ReactionMotionSystem.js";
+import { HitResolutionSystem } from "../hit/HitResolutionSystem.js";
 
 export interface CombatKernelOptions { enableReplay?: boolean; }
 
@@ -73,6 +74,7 @@ export class CombatKernel {
   readonly replay = new ReplayRecorder();
   readonly bloodlustGrabHolds = new Map<string, BloodlustGrabHold>();
   readonly bloodlustWhiffEruptions = new Set<string>();
+  readonly hitResolution = new HitResolutionSystem();
   readonly worldBounds = { xMin: 96, xMax: 2730, zMin: -180, zMax: 180 };
 
   /** Ordered pipeline of combat subsystems executed each tick.
@@ -162,8 +164,8 @@ export class CombatKernel {
     // ── DETECTION phase ──
     this.pipeline.push({ name: "PushBoxResolve", phase: "DETECTION", tick: () => self.push.resolve(self.actors) });
     this.pipeline.push({ name: "ClampBounds", phase: "DETECTION", tick: () => { for (const a of self.actors) self.clampToBounds(a); }});
-    this.pipeline.push({ name: "ResolveHits", phase: "DETECTION", tick: () => self.resolveHitQueries() });
-    this.pipeline.push({ name: "ReactionMotion", phase: "DETECTION", tick: () => self.updateReactionMotion() });
+    this.pipeline.push(this.hitResolution);
+    this.pipeline.push(new ReactionMotionSystem());
 
     // ── RESOLVE phase (per-actor) ──
     this.pipeline.push({ name: "PerActorTick", phase: "RESOLVE", tick: () => {
@@ -451,128 +453,6 @@ export class CombatKernel {
     actor.position.z = Math.max(this.worldBounds.zMin, Math.min(this.worldBounds.zMax, actor.position.z));
   }
 
-  private resolveHitQueries(): void {
-    for(const attacker of this.actors){
-      const inst=attacker.currentAction;
-      if(!inst || attacker.flags.dead || this.hitStop.isFrozen(attacker.id)) continue;
-      const action=getAction(inst.actionName);
-      for(const hitbox of action.active.filter(w=>inst.localFrame>=w.start && inst.localFrame<=w.end)){
-        const query=this.hitResolver.buildQuery(this.tickCount, attacker, hitbox);
-        this.bus.emit("HitQueryBuilt", CombatEventPriority.HitDecision, this.tickCount, query, {sourceActorId:attacker.id});
-        let targetCount=0;
-        for(const target of this.actors){
-          if(target.id===attacker.id) continue;
-          const geometry=this.hitResolver.geometry(query,target);
-          const decision=this.hitDecisionResolver.decide(this.tickCount, query, hitbox, attacker, target, geometry);
-          if(!decision.accepted){
-            if(geometry.overlap) this.bus.emit("HitRejected", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id});
-            continue;
-          }
-          if(targetCount>=query.maxTargets) continue;
-          targetCount++;
-          this.applyHitDecision(attacker,target,decision);
-        }
-      }
-    }
-  }
-
-  private applyHitDecision(attacker:Actor, target:Actor, decision:HitDecision): void {
-    const corr=nextId("corr");
-    const inst=attacker.currentAction;
-    if(inst){
-      if(!inst.alreadyHitByGroup.has(decision.hitbox.hitGroupId)) inst.alreadyHitByGroup.set(decision.hitbox.hitGroupId,new Set());
-      inst.alreadyHitByGroup.get(decision.hitbox.hitGroupId)?.add(target.id);
-      inst.hitConfirmed=true;
-    }
-    this.bus.emit("HitConfirmed", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-    if(decision.armorDecision?.controlBlocked) this.bus.emit("ArmorHit", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-    if(decision.downedDecision?.attempted) this.bus.emit("DownedHit", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-    if(decision.grabDecision?.attempted) {
-      this.bus.emit("GrabAttempted", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-      this.bus.emit(decision.grabDecision.success ? "GrabSucceeded" : "GrabFailed", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-    }
-    if (this.shouldStartBloodlustGrab(attacker, decision)) {
-      this.startBloodlustGrabHold(attacker, target, decision, corr);
-      return;
-    }
-
-    const forceStandKnockdown = this.shouldForceStandKnockdown(target, decision);
-    if (forceStandKnockdown && decision.armorDecision) decision.armorDecision.finalReaction = "downed";
-    this.updateComboCorrection(target, decision, corr);
-    const targetWasBleeding = target.statusEffects.some(s => s.type === "bleed");
-    const req=this.damageResolver.requestFromHit(decision,corr,attacker.currentAction?.actionName, attacker.ai?.damage, {strength:attacker.strength, intelligence:attacker.intelligence, physAtk:attacker.physAtk, magAtk:attacker.magAtk, independentAtk:attacker.independentAtk, elementalDamage:attacker.elemStrength}, {defense:target.defense, elemResist:target.elemResist}, "physical_percent", attacker.level);
-    this.bus.emit("DamageRequested", CombatEventPriority.Damage, this.tickCount, req, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-    const damage=this.damageResolver.apply(target, req, {isCounter:decision.isCounter,isBackAttack:decision.isBackAttack,isCritical:decision.isCritical}, decision.armorDecision?.damageAllowed ?? true, this.damageMultipliersFor(attacker, target, req.actionName));
-    this.lastHit.updateFromDamage(this.tickCount,damage);
-    this.bus.emit("DamageApplied", CombatEventPriority.Damage, this.tickCount, damage, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-
-    const finalReaction=this.reactionResolver.resolve(target,decision);
-    this.lastHit.updateFromHit(this.tickCount,decision,finalReaction,corr);
-    if(req.reactionPolicy==="normal_hit_reaction"){
-      this.bus.emit("ReactionRequested", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId:corr});
-      this.reactionResolver.apply(target,finalReaction,decision,attacker,this.tickCount);
-      this.bus.emit("ReactionApplied", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId:corr});
-      if (forceStandKnockdown) {
-        this.bus.emit("ComboStandKnockdown", CombatEventPriority.Reaction, this.tickCount, {
-          targetId: target.id,
-          state: { ...target.comboCorrection },
-        }, {targetActorId:target.id, correlationId:corr});
-      }
-      this.applyForcedWakeIfQueued(target, corr);
-
-      const action=getAction(attacker.currentAction?.actionName ?? "Idle");
-      const controlBlocked = decision.armorDecision?.controlBlocked === true;
-      const baseHs = decision.armorDecision?.hitStopAllowed === false ? 0 : action.hitStopProfile.frames;
-      let attackerHs = baseHs;
-      let victimHs = baseHs;
-      if (controlBlocked) {
-        attackerHs = target.armorProfile.baseType === "boss_super_armor" ? Math.min(baseHs, 5) : Math.min(baseHs, 3);
-        victimHs = target.armorProfile.baseType === "boss_super_armor" ? 2 : 1;
-      } else {
-        const cap=target.armorProfile.baseType==="building_armor" ? action.hitStopProfile.buildingCapFrames : target.armorProfile.baseType==="boss_super_armor" ? action.hitStopProfile.bossCapFrames : action.hitStopProfile.frames;
-        const hs = Math.min(baseHs, cap ?? baseHs);
-        attackerHs = hs;
-        victimHs = hs;
-      }
-      this.hitStop.start([attacker.id], attackerHs);
-      this.hitStop.start([target.id], victimHs);
-      const hs = Math.max(attackerHs, victimHs);
-      if(hs>0) this.bus.emit("HitStopStarted", CombatEventPriority.Reaction, this.tickCount, {actorIds:[attacker.id,target.id], frames:hs, attackerFrames:attackerHs, victimFrames:victimHs}, {sourceActorId:attacker.id,targetActorId:target.id, correlationId:corr});
-      this.recoil.start(attacker.id, action.recoilProfile.frames);
-      if(action.recoilProfile.frames>0) this.bus.emit("RecoilStarted", CombatEventPriority.Reaction, this.tickCount, {actorId:attacker.id, frames:action.recoilProfile.frames}, {sourceActorId:attacker.id, correlationId:corr});
-    }
-
-    this.bus.emit("DamageNumberRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, amount:damage.finalDamage, sourceKind:damage.sourceKind}, {targetActorId:target.id, correlationId:corr});
-    this.bus.emit("VfxRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, vfx:decision.armorDecision?.controlBlocked?"armor_spark":"hit_spark"}, {targetActorId:target.id, correlationId:corr});
-    if (attacker.id === "player") {
-      if (decision.isCritical) {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 8, durationMs: 120 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-        this.bus.emit("CameraFlashRequested", CombatEventPriority.Feedback, this.tickCount, { color: 0xff4444, alpha: 0.15, durationMs: 40 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-      } else if (finalReaction === "launch" || decision.hitbox.baseDamage >= 34) {
-        this.bus.emit("CameraShakeRequested", CombatEventPriority.Feedback, this.tickCount, { intensity: 3, durationMs: 60 }, { sourceActorId: attacker.id, targetActorId: target.id, correlationId: corr });
-      }
-    }
-    if(damage.hpAfter<=0) {
-      this.applyFrenzyBleedKillRestore(attacker, targetWasBleeding);
-      this.death.kill(target,this.tickCount,this.bus,undefined,corr);
-    }
-    this.applyVimAndVigorBleed(attacker, target, req.actionName);
-    this.updateScenarioFlags(decision, finalReaction, damage);
-  }
-
-  private updateComboCorrection(target: Actor, decision: HitDecision, correlationId: string): void {
-    const update = applyComboCorrectionFromHit(target.comboCorrection, target.reactionState, decision);
-    this.bus.emit("ComboCorrectionUpdated", CombatEventPriority.HitDecision, this.tickCount, {
-      targetId: target.id,
-      bucket: update.bucket,
-      standAdded: update.standAdded,
-      airAdded: update.airAdded,
-      downAdded: update.downAdded,
-      hitRecoveryAdded: update.hitRecoveryAdded,
-      state: { ...target.comboCorrection },
-    }, {targetActorId:target.id, correlationId});
-  }
-
   private tickComboCorrection(actor: Actor): void {
     if (!hasComboCorrectionPressure(actor.comboCorrection)) return;
     actor.comboCorrection.comboElapsedFrames += 1;
@@ -587,36 +467,8 @@ export class CombatKernel {
     }, {targetActorId:actor.id});
   }
 
-  private shouldForceStandKnockdown(target: Actor, decision: HitDecision): boolean {
-    if (target.comboCorrection.standGauge < DEFAULT_COMBO_CORRECTION_CONFIG.barMax) return false;
-    if (target.reactionState !== "none" && target.reactionState !== "micro_stagger" && target.reactionState !== "light_stagger" && target.reactionState !== "heavy_stagger") return false;
-    if (decision.hitbox.canGrab || decision.hitbox.hitType === "grab") return false;
-    if (decision.armorDecision?.controlBlocked) return false;
-    return true;
-  }
-
-  private applyForcedWakeIfQueued(target: Actor, correlationId: string): void {
-    if (!target.comboCorrection.forcedWakeQueued || target.flags.dead) return;
-    target.comboCorrection.forcedWakeQueued = false;
-    target.reactionState = "getting_up";
-    target.handfeel.downRemaining = 0;
-    target.handfeel.reactionRemaining = 0;
-    target.handfeel.getUpRemaining = Math.max(target.handfeel.getUpRemaining, DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames);
-    target.velocity.x = 0;
-    target.velocity.z = 0;
-    target.velocity.y = 0;
-    target.position.y = 0;
-    target.armorProfile.temporaryFlags.getUpArmorUntilTick = this.tickCount + DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames;
-    target.armorProfile.temporaryFlags.invulnerableUntilTick = this.tickCount + DEFAULT_COMBO_CORRECTION_CONFIG.forcedWakeInvulFrames;
-    this.bus.emit("ComboForcedWake", CombatEventPriority.Reaction, this.tickCount, {
-      targetId: target.id,
-      invulnerableUntilTick: target.armorProfile.temporaryFlags.invulnerableUntilTick,
-      state: { ...target.comboCorrection },
-    }, {targetActorId:target.id, correlationId});
-  }
-
-  private shouldStartBloodlustGrab(attacker: Actor, decision: HitDecision): boolean {
-    return attacker.currentAction?.actionName === "Bloodlust" && decision.hitbox.hitType === "grab" && decision.grabDecision?.success === true;
+  startBloodlustGrab(attacker: Actor, target: Actor, decision: HitDecision, correlationId: string): void {
+    this.startBloodlustGrabHold(attacker, target, decision, correlationId);
   }
 
   private startBloodlustGrabHold(attacker: Actor, target: Actor, decision: HitDecision, correlationId: string): void {
@@ -704,9 +556,9 @@ export class CombatKernel {
     const targetWasBleeding = target.statusEffects.some(s => s.type === "bleed");
     const req=this.damageResolver.requestFromHit(decision,correlationId,"Bloodlust", undefined, {strength:attacker.strength, intelligence:attacker.intelligence, physAtk:attacker.physAtk, magAtk:attacker.magAtk, independentAtk:attacker.independentAtk, elementalDamage:attacker.elemStrength}, {defense:target.defense, elemResist:target.elemResist}, "physical_percent", attacker.level);
     this.bus.emit("HitConfirmed", CombatEventPriority.HitDecision, this.tickCount, decision, {sourceActorId:attacker.id,targetActorId:target.id, correlationId});
-    this.updateComboCorrection(target, decision, correlationId);
+    this.hitResolution.updateComboCorrection(this, this.bus, target, decision, correlationId);
     this.bus.emit("DamageRequested", CombatEventPriority.Damage, this.tickCount, req, {sourceActorId:attacker.id,targetActorId:target.id, correlationId});
-    const damage=this.damageResolver.apply(target, req, {isCounter:decision.isCounter,isBackAttack:decision.isBackAttack,isCritical:decision.isCritical}, decision.armorDecision?.damageAllowed ?? true, this.damageMultipliersFor(attacker, target, req.actionName));
+    const damage=this.damageResolver.apply(target, req, {isCounter:decision.isCounter,isBackAttack:decision.isBackAttack,isCritical:decision.isCritical}, decision.armorDecision?.damageAllowed ?? true, this.hitResolution.damageMultipliersFor(this, attacker, target, req.actionName));
     this.lastHit.updateFromDamage(this.tickCount,damage);
     this.bus.emit("DamageApplied", CombatEventPriority.Damage, this.tickCount, damage, {sourceActorId:attacker.id,targetActorId:target.id, correlationId});
     const finalReaction=this.reactionResolver.resolve(target,decision);
@@ -714,7 +566,7 @@ export class CombatKernel {
     this.bus.emit("ReactionRequested", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId});
     this.reactionResolver.apply(target,finalReaction,decision,attacker,this.tickCount);
     this.bus.emit("ReactionApplied", CombatEventPriority.Reaction, this.tickCount, {targetId:target.id, finalReaction}, {targetActorId:target.id, correlationId});
-    this.applyForcedWakeIfQueued(target, correlationId);
+    this.hitResolution.applyForcedWakeIfQueued(this, this.bus, target, correlationId);
     const action=getAction("Bloodlust");
     this.hitStop.start([attacker.id], action.hitStopProfile.frames);
     this.hitStop.start([target.id], action.hitStopProfile.frames);
@@ -724,10 +576,10 @@ export class CombatKernel {
     this.bus.emit("DamageNumberRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, amount:damage.finalDamage, sourceKind:damage.sourceKind}, {targetActorId:target.id, correlationId});
     this.bus.emit("VfxRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:target.id, vfx:"bloodlust_eruption"}, {targetActorId:target.id, correlationId});
     if(damage.hpAfter<=0) {
-      this.applyFrenzyBleedKillRestore(attacker, targetWasBleeding);
+      this.hitResolution.applyFrenzyBleedKillRestore(this.bus, this.tickCount, attacker, targetWasBleeding);
       this.death.kill(target,this.tickCount,this.bus,undefined,correlationId);
     }
-    this.updateScenarioFlags(decision, finalReaction, damage);
+    this.hitResolution.updateScenarioFlags(this, this.bus, decision, finalReaction, damage);
   }
 
   private updateBloodlustWhiffEruptions(): void {
@@ -740,126 +592,6 @@ export class CombatKernel {
       this.bus.emit("VfxRequested", CombatEventPriority.Feedback, this.tickCount, {actorId:actor.id, vfx:"bloodlust_whiff_eruption"}, {sourceActorId:actor.id, correlationId:corr});
     }
   }
-
-  private applyFrenzyBleedKillRestore(attacker: Actor, targetWasBleeding: boolean): void {
-    if (!targetWasBleeding || !attacker.buffs.some(b=>b.type==="frenzy") || attacker.resources.hp <= 0) return;
-    const hpBefore = attacker.resources.hp;
-    const restored = Math.max(1, Math.floor(attacker.resources.maxHp * 0.03));
-    attacker.resources.hp = Math.min(attacker.resources.maxHp, attacker.resources.hp + restored);
-    if (attacker.resources.hp > hpBefore) {
-      this.bus.emit("BuffTicked", CombatEventPriority.Buff, this.tickCount, {actorId:attacker.id, type:"frenzy", reason:"bleeding_kill_restore", restored:attacker.resources.hp-hpBefore, hp:attacker.resources.hp}, {targetActorId:attacker.id});
-    }
-  }
-
-  private applyVimAndVigorBleed(attacker: Actor, target: Actor, actionName?: ActionName): void {
-    if (!actionName || !attacker.buffs.some(b=>b.type==="vim_and_vigor")) return;
-    if (!this.isVimAndVigorBleedAction(actionName)) return;
-    this.status.applyBleed(target, attacker.id, actionName, this.tickCount, this.bus, 1, { durationFrames:420, dotDamagePerStack:14 });
-  }
-
-  private damageMultipliersFor(attacker: Actor, target: Actor, actionName?: ActionName): Array<{name:string; value:number}> {
-    const multipliers: Array<{name:string; value:number}> = [];
-    if (actionName && this.isFrenzySkillAttackAction(actionName)) {
-      const value = attacker.buffs.find(b=>b.type==="frenzy")?.modifiers.find(modifier => modifier.key === "berserker_skill_attack")?.value;
-      if (value && value !== 1) multipliers.push({name:"frenzy_skill_attack", value});
-      const derangeValue = attacker.buffs.find(b=>b.type==="derange")?.modifiers.find(modifier => modifier.key === "derange_skill_attack")?.value;
-      if (derangeValue && derangeValue !== 1) multipliers.push({name:"derange_skill_attack", value:derangeValue});
-      const bloodyCrossValue = attacker.buffs.find(b=>b.type==="bloody_cross")?.modifiers.find(modifier => modifier.key === "bloody_cross_skill_attack")?.value;
-      if (bloodyCrossValue && bloodyCrossValue !== 1) multipliers.push({name:"bloody_cross_skill_attack", value:bloodyCrossValue});
-      const thirstValue = attacker.buffs.find(b=>b.type==="thirst")?.modifiers.find(modifier => modifier.key === "thirst_skill_attack_percent")?.value;
-      if (thirstValue && thirstValue !== 0) multipliers.push({name:"thirst_skill_attack", value: 1 + thirstValue / 100});
-    }
-    // ratio_7: blood_memory strength → atk_reinforce (applies to all attacks, not just frenzy-skill)
-    const bmStrength = attacker.buffs.find(b=>b.type==="blood_memory")?.modifiers.find(modifier => modifier.key === "blood_memory_strength_percent")?.value;
-    if (bmStrength && bmStrength !== 0) multipliers.push({name:"ratio_7_atk_reinforce", value: 1 + bmStrength / 100});
-    // ratio_9: blood_memory incoming damage reduction (applies defensively, wired as target-side multiplier)
-    const bmDef = attacker.buffs.find(b=>b.type==="blood_memory")?.modifiers.find(modifier => modifier.key === "blood_memory_incoming_damage_reduction_percent")?.value;
-    if (bmDef && bmDef !== 0) multipliers.push({name:"ratio_9_misc", value: 1 - bmDef / 100});
-    const ruptureStacks = target.statusEffects.filter(status => status.type === "rupture").reduce((sum, status) => sum + status.stacks, 0);
-    const ruptureMultiplierPerStack = this.status.profile("rupture")?.incomingDirectDamageMultiplierPerStack ?? 0.1;
-    if (ruptureStacks > 0) multipliers.push({name:"rupture_incoming_damage", value:1 + ruptureStacks * ruptureMultiplierPerStack});
-    if (this.isPveComboProtectedTarget(target) && target.comboCorrection.damageScale < 1) {
-      multipliers.push({name:"combo_damage_scale", value:target.comboCorrection.damageScale});
-    }
-    return multipliers;
-  }
-
-  private isPveComboProtectedTarget(target: Actor): boolean {
-    return target.type === "boss" || target.armorProfile.baseType === "boss_super_armor" || target.armorProfile.baseType === "super_armor";
-  }
-
-  private isFrenzySkillAttackAction(actionName: ActionName): boolean {
-    return actionName === "FrenzyBasic1" || actionName === "FrenzyBasic2" || actionName === "FrenzyBasic3" || actionName === "DashAttack" || actionName === "JumpAttack" || actionName === "RagingFury" || actionName === "Bloodlust" || actionName === "GoreCross" || actionName === "OutrageBreak" || actionName === "ExtremeOverkill" || actionName === "RagingFury2" || actionName === "BloodRuin" || actionName === "BloodSword" || actionName === "BurstFury" || actionName === "EarthShatter" || actionName === "UpwardSlash" || actionName === "MountainousWheel";
-  }
-
-  private isVimAndVigorBleedAction(actionName: ActionName): boolean {
-    return actionName === "MountainousWheel" || actionName === "RagingFury" || actionName === "Bloodlust" || actionName === "GoreCross" || actionName === "RagingFury2" || actionName === "BurstFury";
-  }
-
-  private updateScenarioFlags(decision:HitDecision, finalReaction:string, damage:{sourceKind:string; reactionPolicy:string; finalDamage:number}): void {
-    if(decision.accepted && decision.hitbox.id==="nb1") this.scenario.normalHitObserved=true;
-    if(finalReaction==="launch") this.scenario.launchObserved=true;
-    const rfHits=this.bus.archive.filter(e=>e.type==="HitConfirmed" && JSON.stringify(e.payload).includes("rf_pillar")).length;
-    if(rfHits>=4 || decision.hitbox.id.startsWith("rf_pillar_08")) this.scenario.ragingFuryMultiHitObserved=true;
-    if(decision.armorDecision?.baseType==="boss_super_armor") this.scenario.armorHitObserved=true;
-    if(decision.armorDecision?.baseType==="building_armor" && finalReaction==="armor_feedback_only" && damage.finalDamage>0) this.scenario.buildingArmorBlockedControlObserved=true;
-    if(damage.sourceKind==="status_dot" && damage.reactionPolicy==="status_tick_feedback_only") this.scenario.bleedObserved=true;
-  }
-
-  private updateReactionMotion(): void {
-    for(const a of this.actors){
-      if(a.flags.dead) continue;
-      if(this.hitStop.isFrozen(a.id)) continue;
-      const friction = a.currentAction ? 0.82 : 0.74;
-      if(a.reactionState==="launch" || a.reactionState==="air_hitstun" || a.reactionState==="falling" || a.reactionState==="knockback" || a.reactionState==="downed") {
-        a.previousPosition=cloneVec3(a.position);
-        a.position.x += a.velocity.x;
-        a.position.z += a.velocity.z;
-        a.position.y += a.velocity.y;
-        a.velocity.x *= friction;
-        a.velocity.z *= friction;
-        a.velocity.y -= 0.56 * a.comboCorrection.gravityScale;
-        if((a.reactionState==="launch" || a.reactionState==="air_hitstun") && a.velocity.y < 0) a.reactionState="falling";
-        if(a.position.y<=0){
-          a.position.y=0;
-          a.velocity.y=0;
-          if(a.reactionState==="launch" || a.reactionState==="air_hitstun" || a.reactionState==="falling" || a.reactionState==="knockback") {
-            a.reactionState="downed";
-            a.handfeel.downRemaining = Math.max(a.handfeel.downRemaining, 24);
-          }
-        }
-        this.clampToBounds(a);
-      }
-      if(a.reactionState==="light_stagger" || a.reactionState==="heavy_stagger" || a.reactionState==="micro_stagger") {
-        a.previousPosition=cloneVec3(a.position);
-        a.position.x += a.velocity.x;
-        a.position.z += a.velocity.z;
-        a.velocity.x *= 0.72;
-        a.velocity.z *= 0.72;
-        a.handfeel.reactionRemaining -= 1;
-        if(a.handfeel.reactionRemaining<=0){ a.reactionState="none"; a.velocity.x=0; a.velocity.z=0; }
-        this.clampToBounds(a);
-      }
-      if(a.reactionState==="armor_feedback_only") {
-        a.handfeel.reactionRemaining -= 1;
-        if(a.handfeel.reactionRemaining<=0) a.reactionState="none";
-      }
-      if(a.reactionState==="downed") {
-        a.handfeel.downRemaining -= 1;
-        a.velocity.x *= 0.82;
-        a.velocity.z *= 0.82;
-        if(a.handfeel.downRemaining<=0){
-          a.reactionState="getting_up";
-          a.handfeel.getUpRemaining = Math.max(a.handfeel.getUpRemaining, 12);
-          a.armorProfile.temporaryFlags.getUpArmorUntilTick=this.tickCount+12;
-        }
-      } else if(a.reactionState==="getting_up") {
-        a.handfeel.getUpRemaining -= 1;
-        if(a.handfeel.getUpRemaining<=0) a.reactionState="none";
-      }
-    }
-  }
-
 
   exportHandfeelReport(): HandfeelReport {
     const attacks: HandfeelReport["attacks"] = {};
