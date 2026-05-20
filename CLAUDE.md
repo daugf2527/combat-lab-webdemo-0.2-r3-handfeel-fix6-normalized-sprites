@@ -213,6 +213,24 @@ Never commit `NEOPLE_API_KEY`. Frames/hitboxes/gravity/AI are NOT covered by API
 
 Open API and ordinary wiki pages do NOT cover: startup/active/recovery frames, hitbox/hurtbox geometry, launch/gravity curves, combo-protection thresholds, server authority, network sync. Wikipedia/general encyclopedias are background-only — never use them for combat numbers, frame data, hitboxes, damage formulas, skill scaling, AI behavior, or live balance values.
 
+## DNF 原始数据推导规则
+
+凡是涉及逐帧表现、动作还原、受击反馈、装备对齐、碰撞盒的结论，必须以 DNF 原始客户端数据提取结果为准，禁止根据动作名、截图观感、当前前端表现、口述经验或二手资料直接臆测。
+
+必须从原始 `.ani` / PVF / NPK / IMG / 已提取样本推导的内容包括：
+
+- 动作到动画的映射关系（例如 `damage1`/`hitback`/`down`/`overturn`/`quick rebound` 对应哪条原始动作）
+- 帧数、帧顺序、是否循环、每帧 delay、关键帧切换点
+- 跳跃分段（起跳、上升、滞空、下落、落地）与对应帧区间
+- 受击、击退、倒地、起身、翻倒等视觉反馈究竟使用哪条原始 `.ani`
+- `aniOffset`、`imgAnchor`、pivot、角色脚底基准、装备层对齐关系
+- hitbox / hurtbox / damage box / 判定范围几何
+- 装备、时装、武器等附加层的 z-order、挂点、相对位移与帧同步关系
+
+允许使用 API、wiki、策划文档补充语义命名、职业背景、技能说明，但这些资料不能替代原始帧真值，也不能单独作为逐帧实现依据。
+
+若原始数据尚未提取、样本不足或证据冲突，结论必须明确标记为“未验证”或“待提取”；此时应优先补提取脚本、抽样数据或验证记录，不能自行补完“看起来合理”的实现。
+
 ## Test infrastructure
 
 Tests run via `scripts/static-test.mjs`: TS compiled with `tsconfig.test.json` → `.tmp/test-js/`, each `.test.js` executed as standalone Node child process. Assertions: `node:assert/strict` via `tests/static/test-utils.ts` (exports `ok`, `equal`, `deepEqual` only). No test framework.
